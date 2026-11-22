@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>競馬AI 今日の★★</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* 出馬表の紙と芝の緑。数字は等幅で縦にそろえ、印(★★・軸)だけ色で目立たせる */
+  --paper: #f4f3ee;
+  --card: #ffffff;
+  --ink: #1d2420;
+  --muted: #66706a;
+  --line: #dcdcd2;
+  --turf: #1f6b47;
+  --turf-soft: #e3efe7;
+  --gold: #b7791f;
+  --gold-soft: #fbf0dc;
+  --good: #1f6b47;
+  --bad: #b3412f;
+  /* 脚質の色:前に行くほど暖色、後ろほど寒色 */
+  --s0: #c2412d; --s1: #c98a1b; --s2: #3f8f5f; --s3: #3d6fb0;
+  --display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121614; --card: #1a201d; --ink: #e7ebe8; --muted: #9aa49e; --line: #2c3430;
+    --turf: #5cc48e; --turf-soft: #1c2f25; --gold: #e2a84a; --gold-soft: #33291a;
+    --good: #5cc48e; --bad: #ef8a76; color-scheme: dark;
+    --s0: #ef7f68; --s1: #e8b04f; --s2: #6cc893; --s3: #7aa6e6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121614; --card: #1a201d; --ink: #e7ebe8; --muted: #9aa49e; --line: #2c3430;
+  --turf: #5cc48e; --turf-soft: #1c2f25; --gold: #e2a84a; --gold-soft: #33291a;
+  --good: #5cc48e; --bad: #ef8a76; color-scheme: dark;
+  --s0: #ef7f68; --s1: #e8b04f; --s2: #6cc893; --s3: #7aa6e6;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 16px 16px 48px; display: grid; gap: 16px; }
+h1 { font-family: var(--display); font-weight: 900; font-size: 22px; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 17px; margin: 0; text-wrap: balance; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); font-size: 13px; }
+header { display: grid; gap: 8px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, select, .filebtn {
+  font: inherit; font-size: 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  padding: 8px 12px; cursor: pointer;
+}
+button.primary { background: var(--turf); color: #fff; border-color: var(--turf); font-weight: 700; }
+:root[data-theme="dark"] button.primary { color: #0f1612; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.primary { color: #0f1612; } }
+button:focus-visible, select:focus-visible, .filebtn:focus-within, .race:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.chip.ww { background: var(--gold-soft); color: var(--gold); }
+.chip.ax { background: var(--turf-soft); color: var(--turf); }
+.chip.jump { background: var(--line); color: var(--muted); }
+.status { padding: 10px 12px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); font-size: 13px; }
+.status.err { border-color: var(--bad); color: var(--bad); }
+.list { display: grid; gap: 8px; }
+.race {
+  display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; text-align: left;
+  background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+}
+.race.has { border-left-color: var(--gold); }
+.race.sel { border-color: var(--turf); border-left-color: var(--turf); }
+.race .t { font-family: var(--mono); font-weight: 600; font-size: 15px; }
+.race .n { display: grid; gap: 2px; min-width: 0; }
+.race .n b { font-family: var(--display); font-size: 15px; }
+.race .n span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.race .r { display: grid; justify-items: end; gap: 2px; font-size: 12px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 14px; }
+.tblwrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td.l, th.l { text-align: left; }
+tr.isax td { background: var(--turf-soft); }
+tr.isww td { background: var(--gold-soft); }
+.meter { display: inline-block; height: 6px; border-radius: 3px; background: var(--turf); vertical-align: middle; margin-left: 6px; }
+.simbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 2px; }
+.tile .v { font-family: var(--mono); font-size: 22px; font-weight: 600; }
+.tile .k { color: var(--muted); font-size: 12px; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.once { font-family: var(--mono); font-size: 18px; font-weight: 600; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line); }
+.hist { display: grid; gap: 4px; font-size: 13px; }
+.chip.hit { background: var(--turf-soft); color: var(--good); }
+.chip.miss { background: var(--line); color: var(--muted); }
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.result { border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.result.win { border-left-color: var(--good); }
+.podium { font-family: var(--mono); font-size: 16px; font-weight: 600; display: grid; gap: 2px; }
+textarea { width: 100%; min-height: 70px; font: 12px var(--mono); background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+
+/* ---------- 脚質と展開 ---------- */
+.st { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 900; color: #fff; }
+.st.s0 { background: var(--s0); } .st.s1 { background: var(--s1); } .st.s2 { background: var(--s2); } .st.s3 { background: var(--s3); }
+.st.sx { background: var(--line); color: var(--muted); }
+:root[data-theme="dark"] .st:not(.sx) { color: #10140f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .st:not(.sx) { color: #10140f; } }
+.stbar { display: inline-flex; width: 64px; height: 8px; border-radius: 4px; overflow: hidden; vertical-align: middle; margin-left: 6px; background: var(--line); gap: 1px; }
+.stbar i { display: block; height: 100%; }
+.stbar i.s0 { background: var(--s0); } .stbar i.s1 { background: var(--s1); } .stbar i.s2 { background: var(--s2); } .stbar i.s3 { background: var(--s3); }
+.tenkai { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.tenkai .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.pace { font-family: var(--display); font-weight: 900; font-size: 16px; }
+.pace.hi { color: var(--s0); } .pace.mid { color: var(--ink); } .pace.slow { color: var(--s3); }
+.formation { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.fcol { border-radius: 8px; background: var(--paper); padding: 6px; display: grid; align-content: start; gap: 6px; min-height: 64px; }
+.fcol .fh { font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; gap: 4px; }
+.fcol .fh .c0 { color: var(--s0); } .fcol .fh .c1 { color: var(--s1); } .fcol .fh .c2 { color: var(--s2); } .fcol .fh .c3 { color: var(--s3); }
+.fhorses { display: flex; flex-wrap: wrap; gap: 4px; }
+.uma { font-family: var(--mono); font-size: 13px; font-weight: 600; min-width: 26px; height: 26px; padding: 0 4px; border-radius: 6px; display: inline-grid; place-items: center;
+  background: var(--card); border: 1px solid var(--line); }
+.uma.ax { background: var(--turf); color: #fff; border-color: var(--turf); }
+.uma.ww { background: var(--gold); color: #fff; border-color: var(--gold); }
+:root[data-theme="dark"] .uma.ax, :root[data-theme="dark"] .uma.ww { color: #10140f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .uma.ax, :root:not([data-theme="light"]) .uma.ww { color: #10140f; } }
+.adv { font-family: var(--mono); font-size: 12px; }
+.arrow { font-size: 11px; color: var(--muted); text-align: center; letter-spacing: .1em; }
+.tk { font-weight: 700; font-size: 12px; }
+.tk.up { color: var(--good); } .tk.dn { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>競馬AI 今日の★★</h1>
+    <div class="muted" id="meta">読み込み中…</div>
+    <div class="bar">
+      <button class="primary" id="btnDrive" type="button">最新を読み込む</button>
+      <label class="filebtn" for="fileIn">ファイルを選ぶ<input type="file" id="fileIn" accept=".txt,.json,text/plain,application/json"></label>
+      <select id="filter" aria-label="表示するレース">
+        <option value="ww">★★のレースだけ</option>
+        <option value="nerai">◎狙い目だけ</option>
+        <option value="all">全レース</option>
+      </select>
+    </div>
+    <div class="status" id="status" hidden></div>
+  </header>
+
+  <section class="summary" id="summary" hidden aria-label="その日の収支"></section>
+
+  <section class="panel" id="nerai" hidden aria-label="狙い目ごとの収支"></section>
+
+  <section class="list" id="list" aria-label="レースの一覧"></section>
+
+  <section class="panel" id="detail" hidden></section>
+
+  <details>
+    <summary>読み込めないとき</summary>
+    <div style="display:grid;gap:8px;margin-top:8px">
+      <div class="muted">このページは、Colabで「予想」「予想し直す」「答え合わせ」を押すたびに自動で新しくなります(開いている間は2分ごとに読み直します)。読み込めないときは、keiba_app_latest.txt の中身を下に貼り付けても読み込めます。</div>
+      <textarea id="pasteIn" aria-label="予想の中身を貼り付け" placeholder='{"date": "2026-11-22", "races": [...]}'></textarea>
+      <div><button type="button" id="btnPaste">貼り付けた中身を読み込む</button></div>
+    </div>
+  </details>
+</div>
+
+<script>
+// ---------- 見本(Driveから読み込むまでの表示用) ----------
+const SAMPLE = (() => {
+  const mk = (u, name, odds, pw, p3, mark, st, sr) => ({ u, name, odds, pop: null, pw, p3, mark, st, sr });
+  return {
+    date: "見本", made: "見本データ", l2: 0.81, l3: 0.65, sample: true,
+    races: [{
+      id: "sample1", venue: "福島", no: 2, name: "3歳以上1勝クラス(見本)", post: "10:15", surface: "ダート", distance: 1150,
+      axis: 11, himo: [12], third: [5, 6, 8, 9, 13, 14, 15, 16], going: "良",
+      pace: { nige: 2, front: 6, known: 16 },
+      cadv: [0.061, 0.024, -0.012, -0.035], gadv: [0.048, 0.019, -0.006, -0.03],
+      combos: [5, 6, 8, 9, 13, 14, 15, 16].map(c => ({ c: [11, 12, c].sort((a, b) => a - b), odds: null })),
+      result: { order: [11, 3, 12], fin: { 11: 1, 3: 2, 12: 3 }, pay: { "三連複": [{ nums: [3, 11, 12], yen: 4870 }], "単勝": [{ nums: [11], yen: 310 }] }, cost: 800, ret: 0 },
+      horses: [
+        mk(1, "見本ホース1", 45.0, .02, .09, "", 3, [0, 0, .2, .8]), mk(2, "見本ホース2", 80.1, .012, .06, "✕", 2, [0, .2, .6, .2]),
+        mk(3, "見本ホース3", 6.8, .11, .33, "", 0, [.6, .4, 0, 0]), mk(4, "見本ホース4", 120.5, .008, .04, "", 3, [0, 0, 0, 1]),
+        mk(5, "見本ホース5", 9.4, .08, .27, "", 1, [0, .8, .2, 0]), mk(6, "見本ホース6", 12.0, .06, .22, "", 2, [0, .2, .6, .2]),
+        mk(7, "見本ホース7", 60.3, .015, .07, "", 3, [0, 0, .4, .6]), mk(8, "見本ホース8", 7.5, .10, .30, "", 1, [.2, .6, .2, 0]),
+        mk(9, "見本ホース9", 25.2, .035, .16, "", 2, [0, .4, .6, 0]), mk(10, "見本ホース10", 98.0, .01, .05, "", 3, [0, 0, .2, .8]),
+        mk(11, "見本ホース11", 3.1, .24, .58, "", 1, [.2, .8, 0, 0]), mk(12, "見本ホース12", 17.8, .045, .19, "★★", 0, [.4, .4, .2, 0]),
+        mk(13, "見本ホース13", 14.6, .05, .20, "", 2, [0, 0, .8, .2]), mk(14, "見本ホース14", 33.0, .03, .15, "", 1, [0, .6, .4, 0]),
+        mk(15, "見本ホース15", 21.4, .04, .17, "", 2, [0, .2, .6, .2]), mk(16, "見本ホース16", 38.7, .025, .15, "", 3, [0, 0, .2, .8])
+      ]
+    }]
+  };
+})();
+
+// 見本のオッズ(本物ではありません。表示を試すための作り物)
+(() => {
+  const r = SAMPLE.races[0], hs = r.horses, n = hs.length;
+  const pw = hs.map(h => h.pw), t = pw.reduce((a, b) => a + b, 0), q = pw.map(v => v / t);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  r.uo = {}; r.so = {};
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const p = q[i] * q[j] / (1 - q[i]) + q[j] * q[i] / (1 - q[j]);
+    r.uo[hs[i].u + "-" + hs[j].u] = Math.max(1.5, Math.round(0.775 / p * (0.7 + rnd() * 0.6) * 10) / 10);
+    for (let k = j + 1; k < n; k++) {
+      const p3 = (q[i] * q[j] * q[k]) * 6 / ((1 - q[i]) * (1 - q[i] - q[j]));
+      r.so[[hs[i].u, hs[j].u, hs[k].u].sort((a, b) => a - b).join("-")] = Math.max(2, Math.round(0.725 / p3 * (0.7 + rnd() * 0.6) * 10) / 10);
+    }
+  }
+  r.combos.forEach(c => { c.odds = r.so[c.c.join("-")] || null; });
+})();
+
+let DATA = null, SEL = null;
+const HIST = {};
+const $ = id => document.getElementById(id);
+const pct = (x, d = 1) => (x == null || isNaN(x)) ? "-" : (x * 100).toFixed(d) + "%";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const STN = ["逃げ", "先行", "差し", "追込"];
+const STS = ["逃", "先", "差", "追"];
+
+function status(msg, err) {
+  const s = $("status");
+  if (!msg) { s.hidden = true; return; }
+  s.hidden = false; s.textContent = msg; s.className = "status" + (err ? " err" : "");
+}
+
+// ---------- 読み込み ----------
+function findJson(x) {
+  if (x == null) return null;
+  if (typeof x === "string") {
+    // Driveの読み取りは [ ] の前に \ を付けて返すことがあるので、JSONで使わない「\+文字」を元に戻す
+    x = x.replace(/\\([^"\\\/bfnrtu])/g, "$1");
+    const i = x.indexOf('{"date"');
+    if (i >= 0) {
+      const j = x.lastIndexOf("}");
+      try { return JSON.parse(x.slice(i, j + 1)); } catch (e) {}
+    }
+    try { const o = JSON.parse(x); return findJson(o); } catch (e) { return null; }
+  }
+  if (typeof x === "object") {
+    if (Array.isArray(x.races) && x.date) return x;
+    for (const v of Object.values(x)) { const r = findJson(v); if (r) return r; }
+  }
+  return null;
+}
+function findFileId(x) {
+  if (x == null) return null;
+  if (typeof x === "string") {
+    const m = x.match(/"id"\s*:\s*"([\w-]{20,})"[^{}]*?"title"\s*:\s*"keiba_app_latest\.txt"/) ||
+              x.match(/"title"\s*:\s*"keiba_app_latest\.txt"[^{}]*?"id"\s*:\s*"([\w-]{20,})"/);
+    if (m) return m[1];
+    try { return findFileId(JSON.parse(x)); } catch (e) { return null; }
+  }
+  if (typeof x === "object") {
+    if ((x.title === "keiba_app_latest.txt" || x.name === "keiba_app_latest.txt") && x.id) return x.id;
+    for (const v of Object.values(x)) { const r = findFileId(v); if (r) return r; }
+  }
+  return null;
+}
+function setData(d, from) {
+  if (!d || !Array.isArray(d.races)) { status("中身が読めませんでした。keiba_app_latest.txt の中身かどうか確かめてください", true); return; }
+  DATA = d; SEL = null;
+  if (!d.sample) { try { localStorage.setItem("keiba_app_data", JSON.stringify(d)); } catch (e) {} }
+  status(from ? from : "");
+  render();
+}
+async function loadDrive() {
+  // GitHubに置いた data/latest.json を読む(Driveにはつながない)
+  const btn = $("btnDrive");
+  btn.disabled = true; status("最新の予想を読み込んでいます…");
+  try {
+    const r = await fetch(`data/latest.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) { status(`予想のファイルがまだありません(${r.status})。Colabで「予想」を押すと置かれます`, true); return; }
+    const d = findJson(await r.text());
+    if (!d) { status("予想のファイルが読めませんでした", true); return; }
+    const keep = SEL;
+    setData(d, `最新を読み込みました(${d.made} に作った予想)`);
+    if (keep && d.races.some(x => x.id === keep)) { SEL = keep; render(); }
+  } catch (e) {
+    status("読み込めませんでした。通信を確かめて、もう一度押してください", true);
+  } finally { btn.disabled = false; }
+}
+$("btnDrive").addEventListener("click", loadDrive);
+$("fileIn").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const d = findJson(await f.text());
+  setData(d, d ? `ファイルから読み込みました(${d.made} に作った予想)` : "");
+});
+$("btnPaste").addEventListener("click", () => {
+  const d = findJson($("pasteIn").value);
+  setData(d, d ? "貼り付けた中身を読み込みました" : "");
+});
+$("filter").addEventListener("change", render);
+
+// ---------- 展開の予想(逃げ・先行の頭数から出す目安) ----------
+function paceOf(r) {
+  const p = r.pace;
+  if (!p || p.known == null || !p.known) return null;
+  const share = p.front / p.known;
+  if (p.nige >= 2 || share >= 0.42) return { cls: "hi", label: "ハイペース寄り", short: "H", share };
+  if (p.nige === 0 && share < 0.25) return { cls: "slow", label: "スロー寄り", short: "S", share };
+  if (p.nige === 0 || share < 0.3) return { cls: "slow", label: "平均〜スロー", short: "M", share };
+  return { cls: "mid", label: "平均ペース", short: "M", share };
+}
+
+// ---------- 一覧 ----------
+function render() {
+  const d = DATA;
+  $("meta").innerHTML = d.sample
+    ? "いま表示しているのは<b>見本</b>です。「Driveから最新を読み込む」を押すと、その日の予想に変わります"
+    : `${esc(d.date)} の予想 ・ ${esc(d.made)} 作成 ・ オッズはその時点のものです`;
+  const fv = $("filter").value, showAll = fv === "all";
+  const races = [...d.races].sort((a, b) => (a.post || "").localeCompare(b.post || "") || a.venue.localeCompare(b.venue));
+  const shown = races.filter(r => showAll || (r.combos.length && (fv !== "nerai" || r.nerai)));
+  const L = $("list");
+  if (!shown.length) {
+    L.innerHTML = `<div class="status">${showAll ? "レースがありません" : fv === "nerai" ? "狙い目のレースはありません(1番人気のオッズは直前に動くので、予想し直したあとにもう一度見てください)" : "★★が付いたレースはありません。「全レース」に切り替えると全部見られます"}</div>`;
+  } else {
+    L.innerHTML = shown.map(r => {
+      const jump = r.surface === "障害";
+      const pc = paceOf(r);
+      return `<button type="button" class="race ${r.combos.length ? "has" : ""} ${SEL === r.id ? "sel" : ""}" data-id="${esc(r.id)}">
+        <span class="t">${esc(r.post || "--:--")}</span>
+        <span class="n"><b>${esc(r.venue)}${r.no}R ${jump ? '<span class="chip jump">障害</span>' : ""}${r.nerai ? ' <span class="chip hit">◎狙い目</span>' : ""}${r.chui ? ` <span class="chip miss">注意:${esc(r.chui)}</span>` : ""}</b><span>${esc(r.name)}${pc ? ` ・ <span class="pace ${pc.cls}" style="font-size:12px">${pc.label}</span>` : ""}</span></span>
+        <span class="r">${r.combos.length ? `<span class="chip ww">${esc(r.label || "★★")} ${r.himo.join("・")}</span><span class="num">三連複${r.combos.length}点${(r.wide || []).length ? `+ワイド${r.wide.length}` : ""}${(r.fuku || []).length ? `+複勝${r.fuku.length}` : ""}</span>` : r.skip ? `<span class="chip jump">見送り</span><span class="muted" style="font-size:11px">${esc(r.skip)}</span>` : `<span class="muted">買わない</span>`}${resChip(r)}</span>
+      </button>`;
+    }).join("");
+  }
+  L.querySelectorAll(".race").forEach(b => b.addEventListener("click", () => { SEL = b.dataset.id; render(); $("detail").scrollIntoView({ behavior: "smooth", block: "start" }); }));
+  const tot = races.filter(r => r.combos.length);
+  renderSummary(tot);
+  renderNerai(d);
+  if (!SEL && shown.length) SEL = shown[0].id;
+  renderDetail();
+  if (!d.sample) $("meta").innerHTML += ` ・ 買うレース ${tot.length} ・ ${tot.reduce((s, r) => s + r.combos.length + (r.wide || []).length + (r.fuku || []).length, 0)}点`;
+}
+
+// ---------- 結果 ----------
+const yen = v => "¥" + Math.round(v).toLocaleString();
+function resChip(r) {
+  const R = r.result;
+  if (!R) return "";
+  const o = `<span class="num muted">${R.order.join("-")}</span>`;
+  if (!r.combos.length) return o;
+  return (R.ret > 0 ? `<span class="chip hit">的中 ${yen(R.ret)}</span>` : `<span class="chip miss">外れ</span>`) + o;
+}
+function renderSummary(bought) {
+  const S = $("summary");
+  const done = bought.filter(r => r.result);
+  if (!done.length) { S.hidden = true; return; }
+  const cost = done.reduce((s, r) => s + r.result.cost, 0), ret = done.reduce((s, r) => s + r.result.ret, 0);
+  const hits = done.filter(r => r.result.ret > 0).length;
+  S.hidden = false;
+  S.innerHTML = [
+    ["結果が出たレース", `${done.length} / ${bought.length}`, ""],
+    ["的中", `${hits}レース`, hits ? "good" : ""],
+    ["購入", yen(cost), ""],
+    ["払い戻し", yen(ret), ret >= cost ? "good" : "bad"],
+    ["回収率", cost ? Math.round(ret / cost * 100) + "%" : "-", ret >= cost ? "good" : "bad"],
+  ].map(([k, v, c]) => `<div class="tile"><span class="k">${k}</span><span class="v ${c}" style="font-size:18px">${v}</span></div>`).join("");
+}
+// ---------- 狙い目ごとの収支(今日 / これまで) ----------
+let NV = "today";
+function neraiOf(r) {
+  if ("nerai" in r) return { nerai: r.nerai || "", chui: r.chui || "" };
+  const od = r.horses.map(h => h.odds).filter(v => v);
+  const fav = od.length ? Math.min(...od) : null;
+  const mo = r.himo.map(u => (r.horses.find(h => h.u === u) || {}).odds).filter(v => v);
+  const m = mo.length ? mo.reduce((a, b) => a + b, 0) / mo.length : null;
+  const chui = [r.venue === "小倉" ? "小倉" : "", r.going === "重" ? "重馬場" : ""].filter(Boolean).join("・");
+  return { nerai: fav != null && fav >= 1.9 && fav <= 3.2 && m != null && m <= 30 ? "狙い目" : "", chui };
+}
+function todayRows(d) {
+  const rows = [];
+  for (const r of d.races) {
+    const R = r.result;
+    if (!R || !r.combos.length) continue;
+    const pay = R.pay || {};
+    const key = a => [...a].sort((x, y) => x - y).join("-");
+    const p3 = Object.fromEntries((pay["三連複"] || []).map(x => [key(x.nums), x.yen]));
+    const pw = Object.fromEntries((pay["ワイド"] || []).map(x => [key(x.nums), x.yen]));
+    const p1 = Object.fromEntries((pay["複勝"] || []).map(x => [String(x.nums[0]), x.yen]));
+    const w = r.wide || [], f = r.fuku || [], nr = neraiOf(r);
+    rows.push({ "狙い目": nr.nerai ? "狙い目" : "それ以外", "注意": nr.chui, "2列目": r.label || "★★",
+      "三連複_購入": r.combos.length * 100, "三連複_払戻": r.combos.reduce((s, c) => s + (p3[key(c.c)] || 0), 0),
+      "ワイド_購入": w.length * 100, "ワイド_払戻": w.reduce((s, x) => s + (pw[key(x)] || 0), 0),
+      "複勝_購入": f.length * 100, "複勝_払戻": f.reduce((s, u) => s + (p1[String(u)] || 0), 0) });
+  }
+  return rows;
+}
+function renderNerai(d) {
+  const P = $("nerai");
+  const rows = NV === "today" ? todayRows(d) : (d.kiroku || []);
+  if (!todayRows(d).length && !(d.kiroku || []).length) { P.hidden = true; return; }
+  P.hidden = false;
+  const num = v => +v || 0;
+  const summ = (rs, label) => {
+    const buy = rs.reduce((s, x) => s + num(x["三連複_購入"]) + num(x["ワイド_購入"]) + num(x["複勝_購入"]), 0);
+    const ret = rs.reduce((s, x) => s + num(x["三連複_払戻"]) + num(x["ワイド_払戻"]) + num(x["複勝_払戻"]), 0);
+    const hit = rs.filter(x => num(x["三連複_払戻"]) + num(x["ワイド_払戻"]) + num(x["複勝_払戻"]) > 0).length;
+    const part = k => { const b = rs.reduce((s, x) => s + num(x[k + "_購入"]), 0), r = rs.reduce((s, x) => s + num(x[k + "_払戻"]), 0); return b ? Math.round(r / b * 100) + "%" : "-"; };
+    return { label, n: rs.length, hit, buy, ret, roi: buy ? Math.round(ret / buy * 100) : null, sf: part("三連複"), wd: part("ワイド"), fk: part("複勝") };
+  };
+  const groups = [summ(rows, "全部"), summ(rows.filter(x => x["狙い目"] === "狙い目"), "◎狙い目"),
+    summ(rows.filter(x => x["狙い目"] !== "狙い目"), "それ以外"), summ(rows.filter(x => x["注意"]), "注意(小倉・重馬場)"),
+    summ(rows.filter(x => x["2列目"] === "芝印"), "芝印のレース")].filter(g => g.n || g.label === "全部");
+  const days = NV === "all" ? new Set((d.kiroku || []).map(x => x["日付"])).size : 1;
+  const btn = (v, l) => `<button type="button" class="${NV === v ? "primary" : ""}" data-nv="${v}" style="padding:6px 10px">${l}</button>`;
+  P.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
+      <h2>狙い目ごとの収支</h2><div class="simbar">${btn("today", "今日")}${btn("all", "これまで")}</div></div>
+    <div class="muted">${NV === "today" ? "今日の結果が出たレース(今の買い方:三連複+ワイド+複勝・100円ずつ)" : `これまでの記録(${days}日分・答え合わせのたびにたまります)`}</div>
+    ${rows.length ? `<div class="tblwrap"><table><thead><tr><th class="l">分け方</th><th>レース</th><th>的中</th><th>購入</th><th>払い戻し</th><th>回収率</th><th>三連複</th><th>ワイド</th><th>複勝</th></tr></thead><tbody>
+      ${groups.map(g => `<tr><td class="l">${g.label}</td><td class="num">${g.n}</td><td class="num">${g.hit}</td><td class="num">${yen(g.buy)}</td><td class="num">${yen(g.ret)}</td>
+        <td class="num ${g.roi == null ? "" : g.roi >= 100 ? "good" : "bad"}"><b>${g.roi == null ? "-" : g.roi + "%"}</b></td><td class="num muted">${g.sf}</td><td class="num muted">${g.wd}</td><td class="num muted">${g.fk}</td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="muted">${NV === "today" ? "今日はまだ結果が出たレースがありません。Colabで「答え合わせ」を押してから読み込み直してください" : "まだ記録がありません。「答え合わせ」を押すとたまっていきます"}</div>`}
+    <div class="muted">狙い目 = 1番人気1.9〜3.2倍・印の単勝が平均30倍以下(3年半で回収率130%前後)。数十レースたまるまでは、当たり外れで大きく上下します。</div>`;
+  P.querySelectorAll("button[data-nv]").forEach(b => b.addEventListener("click", () => { NV = b.dataset.nv; renderNerai(d); }));
+}
+
+function resultBlock(r) {
+  const R = r.result;
+  if (!R) return `<div class="muted">結果はまだです。レースが終わったら、Colabで「答え合わせ」を押してから読み込み直すと出ます。</div>`;
+  const nm = u => esc((r.horses.find(h => h.u === u) || {}).name || "");
+  const pays = Object.entries(R.pay || {}).map(([k, arr]) => arr.map(x =>
+    `<tr><td class="l">${esc(k)}</td><td class="l num">${x.nums.join("-")}</td><td class="num">${yen(x.yen)}</td></tr>`).join("")).join("");
+  return `<div class="result ${R.ret > 0 ? "win" : ""}">
+    <b style="font-size:13px">結果</b>
+    <div class="podium">${R.order.map((u, i) => `<span>${i + 1}着 ${u} ${nm(u)}</span>`).join("")}</div>
+    ${r.combos.length ? `<div class="${R.ret > 0 ? "good" : "muted"}" style="font-weight:700">${R.ret > 0 ? `三連複 的中:払い戻し ${yen(R.ret)}(購入 ${yen(R.cost)})` : `三連複は外れ(購入 ${yen(R.cost)})`}</div>` : ""}
+    ${pays ? `<div class="tblwrap"><table><thead><tr><th class="l">券種</th><th class="l">組み合わせ</th><th>払い戻し(100円)</th></tr></thead><tbody>${pays}</tbody></table></div>` : ""}
+  </div>`;
+}
+
+// ---------- 脚質と展開のかたまり ----------
+const stChip = st => st == null ? `<span class="st sx" title="前走がなく分からない">?</span>` : `<span class="st s${st}" title="${STN[st]}">${STS[st]}</span>`;
+function stBar(sr) {
+  if (!sr || sr.every(v => v == null)) return "";
+  const t = sr.reduce((a, v) => a + (v || 0), 0) || 1;
+  return `<span class="stbar" title="最近5走:逃げ${pct((sr[0] || 0) / t, 0)} 先行${pct((sr[1] || 0) / t, 0)} 差し${pct((sr[2] || 0) / t, 0)} 追込${pct((sr[3] || 0) / t, 0)}">` +
+    sr.map((v, i) => v ? `<i class="s${i}" style="width:${(v / t) * 100}%"></i>` : "").join("") + "</span>";
+}
+const advTxt = v => v == null ? "-" : (v >= 0 ? "+" : "") + (v * 100).toFixed(1);
+function tenkaiBlock(r) {
+  const hs = r.horses;
+  if (!hs.some(h => "st" in h)) {
+    return `<div class="tenkai"><span class="muted">このファイルには脚質の情報がありません。新しい形で「予想」か「予想し直す」を押すと出ます。</span></div>`;
+  }
+  const pc = paceOf(r);
+  const cols = [0, 1, 2, 3].map(s => hs.filter(h => h.st === s));
+  const unk = hs.filter(h => h.st == null);
+  const bestOf = a => {
+    if (!a || a.every(v => v == null)) return null;
+    let bi = 0; a.forEach((v, i) => { if (v != null && (a[bi] == null || v > a[bi])) bi = i; });
+    return bi;
+  };
+  const cb = bestOf(r.cadv), gb = bestOf(r.gadv);
+  const umaCls = h => h.u === r.axis ? "ax" : r.himo.includes(h.u) ? "ww" : "";
+  return `<div class="tenkai">
+    <div class="head">
+      <b style="font-size:13px">展開の予想</b>
+      ${pc ? `<span class="pace ${pc.cls}">${pc.label}</span>
+        <span class="muted">逃げ候補 ${r.pace.nige}頭 ・ 逃げ+先行 ${r.pace.front}頭(脚質が分かる ${r.pace.known}頭のうち ${pct(pc.share, 0)})</span>` : `<span class="muted">脚質が分かる馬がいません</span>`}
+    </div>
+    <div class="arrow">◀ 前(先頭) ・・・・・・・・・・ 後ろ ▶</div>
+    <div class="formation">
+      ${cols.map((c, s) => `<div class="fcol">
+        <div class="fh"><span class="c${s}">${STN[s]} ${c.length}</span>${r.cadv && r.cadv[s] != null ? `<span class="adv ${s === cb ? "good" : ""}" title="このコースで${STN[s]}の馬の3着内率が、普通より何ポイント高いか">${advTxt(r.cadv[s])}</span>` : ""}</div>
+        <div class="fhorses">${c.map(h => `<span class="uma ${umaCls(h)}" title="${esc(h.name)}">${h.u}</span>`).join("") || '<span class="muted">-</span>'}</div>
+      </div>`).join("")}
+    </div>
+    ${unk.length ? `<div class="muted">脚質が分からない(前走がない)馬:${unk.map(h => h.u).join(" ")}</div>` : ""}
+    <div class="muted" style="display:grid;gap:2px">
+      ${r.cadv && cb != null ? `<span>このコース(${esc(r.venue)}${esc(r.surface)}${r.distance ? r.distance + "m" : ""})で有利な脚質:<b class="good">${STN[cb]}</b>(数字は3着内率の上乗せ・ポイント)</span>` : ""}
+      ${r.gadv && gb != null ? `<span>この馬場(${esc(r.venue)}${esc(r.surface)}・${esc(r.going || "")})で有利な脚質:<b class="good">${STN[gb]}</b> ・ ${r.gadv.map((v, i) => `${STN[i]} ${advTxt(v)}`).join(" / ")}</span>` : `<span>馬場の脚質有利は、馬場状態が発表されてから出ます</span>`}
+    </div>
+  </div>`;
+}
+
+// ---------- 1レースの詳細とシミュレーション ----------
+function renderDetail() {
+  const D = $("detail");
+  const r = DATA.races.find(x => x.id === SEL);
+  if (!r) { D.hidden = true; return; }
+  D.hidden = false;
+  const hs = r.horses;
+  const maxp3 = Math.max(1e-9, ...hs.map(h => h.p3 || 0));
+  const hasSt = hs.some(h => "st" in h);
+  const tk = h => h.sx == null ? "" : h.sx > 0.05 ? '<span class="tk up">向く</span>' : h.sx < -0.05 ? '<span class="tk dn">向かない</span>' : "";
+  D.innerHTML = `
+    <div style="display:grid;gap:4px">
+      <h2>${esc(r.post)} ${esc(r.venue)}${r.no}R ${esc(r.name)}</h2>
+      <div class="muted">${esc(r.surface)}${r.distance ? r.distance + "m" : ""}${r.going ? " ・ " + esc(r.going) : ""} ・ ${hs.length}頭 ・ 三連複:軸 ${r.axis} / 2列目 ${esc(r.label || "★★")} ${r.himo.join("・") || "なし"} / 3列目 ${r.third.filter(u => !r.himo.includes(u)).join(" ") || "なし"}</div>
+    </div>
+    ${r.skip ? `<div class="status">このレースは<b>見送り</b>です(${esc(r.skip)})。3年半の検証で、この条件では毎年負けていました。</div>` : ""}
+    ${r.combos.length ? `<div class="tiles">
+      <div class="tile"><span class="k">三連複(軸-${esc(r.label || "★★")}-3列目)</span><span class="v" style="font-size:16px">${r.combos.length}点</span></div>
+      ${(r.wide || []).length ? `<div class="tile"><span class="k">ワイド(軸-${esc(r.label || "★★")})</span><span class="v num" style="font-size:16px">${r.wide.map(w => w.join("-")).join(" ")}</span></div>` : ""}
+      ${(r.fuku || []).length ? `<div class="tile"><span class="k">複勝(芝印)</span><span class="v num" style="font-size:16px">${r.fuku.join(" ")}</span></div>` : ""}
+      <div class="tile"><span class="k">合計(100円ずつ)</span><span class="v" style="font-size:16px">¥${((r.combos.length + (r.wide || []).length + (r.fuku || []).length) * 100).toLocaleString()}</span></div>
+    </div>` : ""}
+    ${r.combos.length && (r.nerai || r.chui || r.fav_odds != null) ? `<div class="${r.nerai ? "good" : "muted"}" style="font-size:13px">${r.nerai ? "<b>◎狙い目</b>:" : ""}1番人気 ${r.fav_odds != null ? r.fav_odds.toFixed(1) + "倍" : "-"} ・ 印の単勝 平均${r.mark_odds != null ? r.mark_odds.toFixed(1) + "倍" : "-"}${r.nerai ? "(1番人気1.9〜3.2倍・印30倍以下:3年半で回収率130%前後)" : "(狙い目は 1番人気1.9〜3.2倍・印30倍以下)"}${r.chui ? ` ・ <span class="bad">注意:${esc(r.chui)}(3年半で回収率54〜63%)</span>` : ""}</div>` : ""}
+    ${r.label === "芝印" && r.combos.length ? `<div class="muted">軟らかい芝なので、2列目は★★の代わりに「芝印」(単勝10〜100倍・先行/軽め/体重減/前走0.7〜1.2秒差のうち3つ以上・逃げ/体重増/前走最後方なし)です。</div>` : ""}
+    ${resultBlock(r)}
+    ${tenkaiBlock(r)}
+    <div class="simbar">
+      <label for="simN" class="muted">回数</label>
+      <select id="simN"><option value="10000">1万回</option><option value="100000" selected>10万回</option><option value="300000">30万回</option></select>
+      <button class="primary" type="button" id="btnSim">シミュレーションを回す</button>
+      <button type="button" id="btnOnce">1回だけ走らせる</button>
+    </div>
+    <div id="once"></div>
+    <div id="simOut"></div>
+    <div class="tblwrap"><table id="htbl">
+      <thead><tr><th>馬番</th><th class="l">馬名・騎手</th><th>印</th>${hasSt ? '<th class="l">脚質(最近5走)</th><th class="l">展開</th>' : ""}<th>単勝</th><th>AI勝率</th><th>AI複勝率</th><th>1着</th><th>2着内</th><th>3着内</th><th>着順</th></tr></thead>
+      <tbody>${hs.map(h => `<tr class="${h.u === r.axis ? "isax" : r.himo.includes(h.u) ? "isww" : ""}" data-u="${h.u}">
+        <td class="num">${h.u}</td><td class="l">${esc(h.name)}${h.jk ? `<br><span class="muted" style="font-size:11px">${esc(h.jk)}${h.jk3 != null ? ` (3着内${Math.round(h.jk3 * 100)}%)` : ""}</span>` : ""}</td>
+        <td>${h.u === r.axis ? '<span class="chip ax">軸</span>' : ""}${h.mark ? `<span class="chip ${h.mark === "★★" || h.mark === "芝印" ? "ww" : "jump"}">${esc(h.mark)}</span>` : ""}</td>
+        ${hasSt ? `<td class="l">${stChip(h.st)}${stBar(h.sr)}</td><td class="l">${tk(h)}</td>` : ""}
+        <td class="num">${h.odds != null && !isNaN(h.odds) ? h.odds.toFixed(1) : "-"}</td>
+        <td class="num">${pct(h.pw)}</td>
+        <td class="num">${pct(h.p3)}<span class="meter" style="width:${Math.round((h.p3 || 0) / maxp3 * 40)}px"></span></td>
+        <td class="num sim1">-</td><td class="num sim2">-</td><td class="num sim3">-</td>
+        <td class="num">${r.result && r.result.fin ? (r.result.fin[h.u] && r.result.fin[h.u] < 99 ? r.result.fin[h.u] + "着" : "-") : ""}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <div class="hist" id="hist"></div>
+    <div class="muted">脚質は最近5走の最初のコーナーの位置から出しています(色の帯は、逃げ・先行・差し・追込だった割合)。「展開」は、前に行く馬が多いレースの差し・追込馬や、前が少ないレースの逃げ・先行馬に「向く」と出ます。展開の予想は頭数から出した目安です。</div>
+    <div class="muted">シミュレーションは、AIの勝率で1着を決め、2着・3着は人気馬を高く見すぎないよう補正した確率(2着 ${DATA.l2} / 3着 ${DATA.l3})で決めます。回すたびに少しずつ数字がぶれ、回数を増やすほど落ち着きます。期待値は「当たる確率 × オッズ」で、1を超えれば理屈の上ではプラスです。オッズは予想を作った時点のものです。</div>`;
+  $("btnSim").addEventListener("click", () => runSim(r));
+  $("btnOnce").addEventListener("click", () => runOnce(r));
+  renderHist(r);
+  // 画面を描き直したとき(別のレースから戻った・Driveから読み直した等)も、回した結果を表に戻す
+  const L = LASTSIM[r.id];
+  if (L && L.args && L.args[1].length === r.horses.length) showSim(r, ...L.args, true);
+}
+
+function prep(r) {
+  const p = r.horses.map(h => (h.pw == null || isNaN(h.pw)) ? 1e-9 : Math.max(h.pw, 1e-9));
+  const s = p.reduce((a, b) => a + b, 0);
+  const norm = a => { const t = a.reduce((x, y) => x + y, 0); return a.map(v => v / t); };
+  const p1 = p.map(v => v / s);
+  return { p1, q2: norm(p1.map(v => Math.pow(v, DATA.l2))), q3: norm(p1.map(v => Math.pow(v, DATA.l3))) };
+}
+function pick(w, ex1, ex2) {
+  let tot = 0;
+  for (let i = 0; i < w.length; i++) if (i !== ex1 && i !== ex2) tot += w[i];
+  let x = Math.random() * tot;
+  for (let i = 0; i < w.length; i++) {
+    if (i === ex1 || i === ex2) continue;
+    x -= w[i]; if (x <= 0) return i;
+  }
+  for (let i = w.length - 1; i >= 0; i--) if (i !== ex1 && i !== ex2) return i;
+}
+function runOnce(r) {
+  const { p1, q2, q3 } = prep(r);
+  const a = pick(p1, -1, -1), b = pick(q2, a, -1), c = pick(q3, a, b);
+  const U = [a, b, c].map(i => r.horses[i]);
+  const key = U.map(h => h.u).sort((x, y) => x - y).join("-");
+  const hit = r.combos.find(cb => cb.c.join("-") === key);
+  $("once").innerHTML = `<div class="once">1着 ${U[0].u} ${esc(U[0].name)}<br>2着 ${U[1].u} ${esc(U[1].name)}<br>3着 ${U[2].u} ${esc(U[2].name)}<br>
+    <span class="${hit ? "good" : "muted"}" style="font-size:14px">${r.combos.length ? (hit ? `三連複 ${key} 的中${hit.odds ? `(${hit.odds}倍)` : ""}` : "三連複は外れ") : "このレースは買わない"}</span></div>`;
+}
+function runSim(r) {
+  const N = +$("simN").value;
+  const { p1, q2, q3 } = prep(r);
+  const n = r.horses.length;
+  const c1 = new Float64Array(n), c2 = new Float64Array(n), c3 = new Float64Array(n);
+  const combo = new Map(), uren = new Map();
+  const buy = new Map(r.combos.map((cb, i) => [cb.c.join("-"), i]));
+  const buyHit = new Float64Array(r.combos.length);
+  let done = 0, raceHit = 0;
+  const btn = $("btnSim"); btn.disabled = true;
+  const step = () => {
+    const end = Math.min(N, done + 20000);
+    for (; done < end; done++) {
+      const a = pick(p1, -1, -1), b = pick(q2, a, -1), c = pick(q3, a, b);
+      c1[a]++; c2[a]++; c2[b]++; c3[a]++; c3[b]++; c3[c]++;
+      const k = [r.horses[a].u, r.horses[b].u, r.horses[c].u].sort((x, y) => x - y).join("-");
+      combo.set(k, (combo.get(k) || 0) + 1);
+      const k2 = r.horses[a].u < r.horses[b].u ? r.horses[a].u + "-" + r.horses[b].u : r.horses[b].u + "-" + r.horses[a].u;
+      uren.set(k2, (uren.get(k2) || 0) + 1);
+      const bi = buy.get(k);
+      if (bi !== undefined) { buyHit[bi]++; raceHit++; }
+    }
+    btn.textContent = `回しています… ${Math.round(done / N * 100)}%`;
+    if (done < N) { setTimeout(step, 0); return; }
+    btn.disabled = false; btn.textContent = "もう一度回す";
+    showSim(r, N, c1, c2, c3, combo, uren, buyHit, raceHit);
+  };
+  step();
+}
+function showSim(r, N, c1, c2, c3, combo, uren, buyHit, raceHit, replay) {
+  document.querySelectorAll("#htbl tbody tr").forEach((tr, i) => {
+    tr.querySelector("td.sim1").textContent = pct(c1[i] / N);
+    tr.querySelector("td.sim2").textContent = pct(c2[i] / N);
+    tr.querySelector("td.sim3").textContent = pct(c3[i] / N);
+  });
+  const rows = r.combos.map((cb, i) => {
+    const p = buyHit[i] / N, a = adjP(p, cb.odds, "sfuku");
+    return { k: cb.c.join("-"), p, odds: cb.odds, pa: a.pa };
+  });
+  const withOdds = rows.filter(x => x.odds && x.pa != null);
+  const ev = withOdds.length ? withOdds.reduce((s, x) => s + x.pa * x.odds, 0) / withOdds.length : null;
+  LASTSIM[r.id] = { N, combo, uren, args: [N, c1, c2, c3, combo, uren, buyHit, raceHit] };
+  $("simOut").innerHTML = `
+    <div class="tiles">
+      <div class="tile"><span class="k">${N.toLocaleString()}回のうち、買い目が当たった割合</span><span class="v">${r.combos.length ? pct(raceHit / N) : "-"}</span></div>
+      <div class="tile"><span class="k">買い目の点数</span><span class="v">${r.combos.length}点</span></div>
+      <div class="tile"><span class="k">100円あたりの期待値(控えめ・オッズがある分)</span><span class="v ${ev == null ? "" : ev >= 1 ? "good" : "bad"}">${ev == null ? "-" : ev.toFixed(2)}</span></div>
+    </div>
+    ${rows.length ? `<div class="tblwrap"><table><thead><tr><th class="l">三連複の買い目</th><th>当たる確率</th><th>オッズ</th><th>期待値(控えめ)</th></tr></thead><tbody>
+      ${rows.sort((a, b) => b.p - a.p).map(x => `<tr><td class="l num">${x.k}</td><td class="num">${pct(x.p, 2)}</td><td class="num">${x.odds ? x.odds.toFixed(1) : "-"}</td>
+        <td class="num ${x.pa != null ? (x.pa * x.odds >= 1 ? "good" : "bad") : ""}">${x.pa != null ? (x.pa * x.odds).toFixed(2) : "-"}</td></tr>`).join("")}
+    </tbody></table></div>` : ""}
+    <div id="comboBox"></div>`;
+  renderCombos(r);
+  if (replay) { renderHist(r); return; }
+  (HIST[r.id] = HIST[r.id] || []).unshift({ N, hit: r.combos.length ? raceHit / N : null, ev, at: new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) });
+  HIST[r.id] = HIST[r.id].slice(0, 6);
+  renderHist(r);
+}
+// ---------- 期待値を控えめにする ----------
+// ㉛の検証で、AIがオッズより「1.5〜2倍来る」と見た馬でも、実際はオッズより0〜6%多く来ただけだった。
+// なので、シミュレーションの的中率をそのまま使わず、オッズから見た的中率(払戻率 ÷ オッズ)に寄せてから期待値を出す。
+//   控えめな的中率 = オッズの的中率 × (シミュレーション ÷ オッズの的中率) ^ W   (W = 0.2:AIの言うずれの2割だけ信じる)
+// オッズの3倍以上ずれている組み合わせは「ずれすぎ」として、期待値順から外す。
+const SHRINK_W = 0.2, TOO_FAR = 3;
+const PAY_RATE = { uren: 0.775, sfuku: 0.75 };
+function adjP(p, odds, bet) {
+  if (!odds || !p) return { pa: null, pm: null, ratio: null };
+  const pm = PAY_RATE[bet] / odds;
+  const ratio = p / pm;
+  return { pa: pm * Math.pow(ratio, SHRINK_W), pm, ratio };
+}
+
+// ---------- 馬連・三連複:シミュレーションの的中率 × オッズ = 期待値 ----------
+const LASTSIM = {};
+let CB = { bet: "uren", sort: "p" };
+function renderCombos(r) {
+  const box = $("comboBox"), S = LASTSIM[r.id];
+  if (!box || !S) return;
+  const isU = CB.bet === "uren";
+  const counts = isU ? S.uren : S.combo, oddsMap = (isU ? r.uo : r.so) || {};
+  const buys = isU ? new Set() : buyKeys(r);
+  let rows = [...counts.entries()].map(([k, v]) => {
+    const p = v / S.N, o = oddsMap[k] ?? (isU ? null : (r.combos.find(c => c.c.join("-") === k) || {}).odds) ?? null;
+    const { pa, pm, ratio } = adjP(p, o, CB.bet);
+    return { k, p, o, pm, ratio, raw: o ? p * o : null, ev: pa != null ? pa * o : null, far: ratio != null && (ratio >= TOO_FAR || ratio <= 1 / TOO_FAR) };
+  });
+  const MINP = 0.003;                                                  // 期待値順は、0.3%未満(回数が少なくぶれが大きい)を外す
+  if (CB.sort === "ev") rows = rows.filter(x => x.ev != null && x.p >= MINP && !x.far).sort((a, b) => b.ev - a.ev);
+  else rows.sort((a, b) => b.p - a.p);
+  rows = rows.slice(0, 15);
+  const nOdds = Object.keys(oddsMap).length;
+  const btn = (key, val, label) => `<button type="button" class="${CB[key] === val ? "primary" : ""}" data-k="${key}" data-v="${val}" style="padding:6px 10px">${label}</button>`;
+  box.innerHTML = `<div style="display:grid;gap:8px">
+    <div class="simbar">${btn("bet", "uren", "馬連")}${btn("bet", "sfuku", "三連複")}<span class="muted" style="margin:0 4px">|</span>${btn("sort", "p", "出やすい順")}${btn("sort", "ev", "期待値順")}</div>
+    ${!nOdds ? `<div class="muted">このファイルには${isU ? "馬連" : "三連複"}のオッズが入っていないので、期待値は出せません(新しい形で「予想し直す」を押すと入ります)。</div>` : ""}
+    ${rows.length ? `<div class="tblwrap"><table><thead><tr><th class="l">${isU ? "馬連" : "三連複"}</th><th>的中率<br>(シミュ)</th><th>的中率<br>(オッズ)</th><th>オッズ</th><th>期待値<br>(控えめ)</th><th>元の<br>期待値</th></tr></thead><tbody>
+      ${rows.map(x => `<tr><td class="l num">${x.k}${buys.has(x.k) ? ' <span class="chip ww">買い目</span>' : ""}${x.far ? ' <span class="chip jump">ずれすぎ</span>' : ""}</td><td class="num">${pct(x.p, 2)}</td>
+        <td class="num muted">${x.pm != null ? pct(x.pm, 2) : "-"}</td>
+        <td class="num">${x.o ? x.o.toFixed(1) : "-"}</td><td class="num ${x.ev == null ? "" : x.ev >= 1 ? "good" : "bad"}"><b>${x.ev == null ? "-" : x.ev.toFixed(2)}</b></td>
+        <td class="num muted">${x.raw == null ? "-" : x.raw.toFixed(2)}</td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="muted">${CB.sort === "ev" ? "オッズがあって的中率0.3%以上の組み合わせがありません" : "まだありません"}</div>`}
+    <div class="muted">「期待値(控えめ)」は、シミュレーションの的中率をそのまま使わず、オッズから見た的中率(払戻率 ÷ オッズ)に寄せてから出しています。過去3年半の検証で、AIがオッズと食い違うとき、実際に当たっていたのはそのずれの1〜2割ほどだったためです(AIの言うずれの2割だけを信じる計算)。「元の期待値」は寄せる前の数字です。</div>
+    <div class="muted">シミュレーションとオッズが3倍以上ずれている組み合わせには「ずれすぎ」が付き、期待値順からは外れます。外れているのはたいていAIの方です。${isU ? "" : "三連複のオッズは、AI複勝率から見て出やすい150通りと買い目の分だけ入れています。"}期待値順は的中率0.3%以上だけを並べています。朝の「予想」のときのオッズは、まだ売れている数が少なくて極端に高いことがあるので、期待値は発走直前の「予想し直す」のあとに見てください。</div>
+  </div>`;
+  box.querySelectorAll("button[data-k]").forEach(b => b.addEventListener("click", () => { CB[b.dataset.k] = b.dataset.v; renderCombos(r); }));
+}
+function buyKeys(r) { return new Set(r.combos.map(cb => cb.c.join("-"))); }
+function renderHist(r) {
+  const h = HIST[r.id] || [];
+  $("hist").innerHTML = h.length ? `<b style="font-size:13px">回した記録(このレース)</b>` + h.map(x =>
+    `<div class="num">${x.at} ・ ${x.N.toLocaleString()}回 ・ 的中 ${x.hit == null ? "-" : pct(x.hit, 2)} ・ 期待値 ${x.ev == null ? "-" : x.ev.toFixed(2)}</div>`).join("") : "";
+}
+
+// ---------- 起動:前回の読み込み → 見本 ----------
+(() => {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("keiba_app_data") || "null"); } catch (e) {}
+  setData(saved || SAMPLE, saved ? `前回読み込んだ予想を表示しています(${saved.made})。最新を読み込んでいます` : "");
+  loadDrive();
+  setInterval(() => { if (document.visibilityState === "visible") loadDrive(); }, 120000);   // 2分ごとに自動で最新に
+})();
+</script>
+</body>
+</html>
