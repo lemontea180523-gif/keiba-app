@@ -135,6 +135,29 @@ input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .tk { font-weight: 700; font-size: 12px; }
 .tk.up { color: var(--good); } .tk.dn { color: var(--bad); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* 展開シミュレーション */
+.tsim { display: grid; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.tsim .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.tsbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tsbar .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tsbar .seg button { border: 0; border-radius: 0; padding: 8px 10px; }
+.tsbar .seg button + button { border-left: 1px solid var(--line); }
+.tsbar .seg button.on { background: var(--turf); color: #fff; font-weight: 700; }
+.tsstage { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; gap: 10px; align-items: center; }
+.tsstage svg { width: 100%; height: auto; }
+.tsphase { font-family: var(--display); font-weight: 900; font-size: 22px; }
+.tsstrip { width: 100%; height: auto; background: var(--turf-soft); border-radius: 8px; }
+.tslab { font-size: 9px; fill: var(--muted); font-family: var(--body); }
+.tsstrip .tslab { font-size: 11px; }
+.tsnum { font-size: 10px; font-weight: 700; font-family: var(--mono); }
+.tsrank { font-size: 11px; font-weight: 900; fill: var(--gold); font-family: var(--body); }
+.tsrows { display: grid; gap: 4px; font-size: 13px; }
+.tsrows .k { display: inline-block; min-width: 7em; color: var(--muted); }
+/* 横に長い表でページ全体が広がらないように(スマホで拡大されたまま戻らなくなるのを防ぐ) */
+.panel > *, .tsim, .tsim > * { min-width: 0; }
+#tsTable { overflow-x: auto; }
+@media (max-width: 520px) { .tsstage { grid-template-columns: 1fr; } .tsphase { font-size: 18px; } }
 </style>
 </head>
 <body>
@@ -148,6 +171,7 @@ input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
       <select id="filter" aria-label="表示するレース">
         <option value="ww">★★のレースだけ</option>
         <option value="nerai">◎狙い目だけ</option>
+        <option value="kn">◎消し狙いだけ</option>
         <option value="all">全レース</option>
       </select>
     </div>
@@ -317,37 +341,43 @@ function render() {
     : `${esc(d.date)} の予想 ・ ${esc(d.made)} 作成 ・ オッズはその時点のものです`;
   const fv = $("filter").value, showAll = fv === "all";
   const races = [...d.races].sort((a, b) => (a.post || "").localeCompare(b.post || "") || a.venue.localeCompare(b.venue));
-  const shown = races.filter(r => showAll || (r.combos.length && (fv !== "nerai" || r.nerai)));
+  const shown = races.filter(r => showAll || (isBuy(r) && (fv === "kn" ? r.kn : (fv !== "nerai" || r.nerai))));
   const L = $("list");
   if (!shown.length) {
-    L.innerHTML = `<div class="status">${showAll ? "レースがありません" : fv === "nerai" ? "狙い目のレースはありません(1番人気のオッズは直前に動くので、予想し直したあとにもう一度見てください)" : "★★が付いたレースはありません。「全レース」に切り替えると全部見られます"}</div>`;
+    L.innerHTML = `<div class="status">${showAll ? "レースがありません" : fv === "kn" ? "消し狙いのレースはありません" : fv === "nerai" ? "狙い目のレースはありません(1番人気のオッズは直前に動くので、予想し直したあとにもう一度見てください)" : "★★が付いたレースはありません。「全レース」に切り替えると全部見られます"}</div>`;
   } else {
     L.innerHTML = shown.map(r => {
       const jump = r.surface === "障害";
       const pc = paceOf(r);
-      return `<button type="button" class="race ${r.combos.length ? "has" : ""} ${SEL === r.id ? "sel" : ""}" data-id="${esc(r.id)}">
+      return `<button type="button" class="race ${isBuy(r) ? "has" : ""} ${SEL === r.id ? "sel" : ""}" data-id="${esc(r.id)}">
         <span class="t">${esc(r.post || "--:--")}</span>
-        <span class="n"><b>${esc(r.venue)}${r.no}R ${jump ? '<span class="chip jump">障害</span>' : ""}${r.nerai ? ' <span class="chip hit">◎狙い目</span>' : ""}${r.chui ? ` <span class="chip miss">注意:${esc(r.chui)}</span>` : ""}</b><span>${esc(r.name)}${pc ? ` ・ <span class="pace ${pc.cls}" style="font-size:12px">${pc.label}</span>` : ""}</span></span>
-        <span class="r">${r.combos.length ? `<span class="chip ww">${esc(r.label || "★★")} ${r.himo.join("・")}</span><span class="num">三連複${r.combos.length}点${(r.wide || []).length ? `+ワイド${r.wide.length}` : ""}${(r.fuku || []).length ? `+複勝${r.fuku.length}` : ""}</span>` : r.skip ? `<span class="chip jump">見送り</span><span class="muted" style="font-size:11px">${esc(r.skip)}</span>` : `<span class="muted">買わない</span>`}${resChip(r)}</span>
+        <span class="n"><b>${esc(r.venue)}${r.no}R ${jump ? '<span class="chip jump">障害</span>' : ""}${r.kn ? ' <span class="chip hit">◎消し狙い</span>' : ""}${r.nerai ? ' <span class="chip hit">◎狙い目</span>' : ""}${r.chui ? ` <span class="chip miss">注意:${esc(r.chui)}</span>` : ""}${furyo(r) ? ' <span class="chip jump">不良馬場</span>' : ""}</b><span>${esc(r.name)}${pc ? ` ・ <span class="pace ${pc.cls}" style="font-size:12px">${pc.label}</span>` : ""}</span></span>
+        <span class="r">${r.combos.length ? `<span class="chip ww">${esc(r.label || "★★")} ${r.himo.join("・")}</span><span class="num">三連複${r.combos.length}点${(r.wide || []).length ? `+ワイド${r.wide.length}` : ""}${(r.fuku || []).length ? `+複勝${r.fuku.length}` : ""}</span>` : um(r).length ? `<span class="chip ww">買い方D 馬連</span><span class="num">${um(r).map(x => x.join("-")).join(" ")}</span>` : r.skip ? `<span class="chip jump">見送り</span><span class="muted" style="font-size:11px">${esc(r.skip)}</span>` : `<span class="muted">買わない</span>`}${resChip(r)}</span>
       </button>`;
     }).join("");
   }
   L.querySelectorAll(".race").forEach(b => b.addEventListener("click", () => { SEL = b.dataset.id; render(); $("detail").scrollIntoView({ behavior: "smooth", block: "start" }); }));
-  const tot = races.filter(r => r.combos.length);
+  const tot = races.filter(isBuy);
   renderSummary(tot);
   renderNerai(d);
   if (!SEL && shown.length) SEL = shown[0].id;
   renderDetail();
-  if (!d.sample) $("meta").innerHTML += ` ・ 買うレース ${tot.length} ・ ${tot.reduce((s, r) => s + r.combos.length + (r.wide || []).length + (r.fuku || []).length, 0)}点`;
+  if (!d.sample) $("meta").innerHTML += ` ・ 買うレース ${tot.length} ・ ${tot.reduce((s, r) => s + r.combos.length + (r.wide || []).length + (r.fuku || []).length + um(r).length, 0)}点`;
 }
 
 // ---------- 結果 ----------
+// 買い方D(消し条件なし → 馬連 1番人気-★★)。古いファイルには umaren がない
+function um(r) { return r.umaren || []; }
+// 不良馬場(㊺・㊻):★★がないレースでも、10〜50倍の馬は人気より来やすい(倍率1.1〜1.2)。回収率はトントンなので参考の目印
+function furyo(r) { return r.going === "不良"; }
+function furyoPick(r, h) { return furyo(r) && h.odds != null && h.odds >= 10 && h.odds <= 50 && h.ti != null && h.ti >= 0.18 && h.ti <= 0.465; }
+function isBuy(r) { return r.combos.length > 0 || um(r).length > 0; }
 const yen = v => "¥" + Math.round(v).toLocaleString();
 function resChip(r) {
   const R = r.result;
   if (!R) return "";
   const o = `<span class="num muted">${R.order.join("-")}</span>`;
-  if (!r.combos.length) return o;
+  if (!isBuy(r)) return o;
   return (R.ret > 0 ? `<span class="chip hit">的中 ${yen(R.ret)}</span>` : `<span class="chip miss">外れ</span>`) + o;
 }
 function renderSummary(bought) {
@@ -380,14 +410,16 @@ function todayRows(d) {
   const rows = [];
   for (const r of d.races) {
     const R = r.result;
-    if (!R || !r.combos.length) continue;
+    if (!R || !isBuy(r)) continue;
     const pay = R.pay || {};
     const key = a => [...a].sort((x, y) => x - y).join("-");
     const p3 = Object.fromEntries((pay["三連複"] || []).map(x => [key(x.nums), x.yen]));
     const pw = Object.fromEntries((pay["ワイド"] || []).map(x => [key(x.nums), x.yen]));
     const p1 = Object.fromEntries((pay["複勝"] || []).map(x => [String(x.nums[0]), x.yen]));
+    const pu = Object.fromEntries((pay["馬連"] || []).map(x => [key(x.nums), x.yen]));
     const w = r.wide || [], f = r.fuku || [], nr = neraiOf(r);
-    rows.push({ "狙い目": nr.nerai ? "狙い目" : "それ以外", "注意": nr.chui, "2列目": r.label || "★★",
+    rows.push({ "買い方": r.combos.length ? "C" : "D", "馬連_購入": um(r).length * 100, "馬連_払戻": um(r).reduce((s, x) => s + (pu[key(x)] || 0), 0),
+      "狙い目": nr.nerai ? "狙い目" : "それ以外", "注意": nr.chui, "2列目": r.label || "★★", "消し狙い": r.kn ? "消し狙い" : "", "消し": r.keshi || "",
       "三連複_購入": r.combos.length * 100, "三連複_払戻": r.combos.reduce((s, c) => s + (p3[key(c.c)] || 0), 0),
       "ワイド_購入": w.length * 100, "ワイド_払戻": w.reduce((s, x) => s + (pw[key(x)] || 0), 0),
       "複勝_購入": f.length * 100, "複勝_払戻": f.reduce((s, u) => s + (p1[String(u)] || 0), 0) });
@@ -401,25 +433,30 @@ function renderNerai(d) {
   P.hidden = false;
   const num = v => +v || 0;
   const summ = (rs, label) => {
-    const buy = rs.reduce((s, x) => s + num(x["三連複_購入"]) + num(x["ワイド_購入"]) + num(x["複勝_購入"]), 0);
-    const ret = rs.reduce((s, x) => s + num(x["三連複_払戻"]) + num(x["ワイド_払戻"]) + num(x["複勝_払戻"]), 0);
-    const hit = rs.filter(x => num(x["三連複_払戻"]) + num(x["ワイド_払戻"]) + num(x["複勝_払戻"]) > 0).length;
+    const buy = rs.reduce((s, x) => s + num(x["三連複_購入"]) + num(x["ワイド_購入"]) + num(x["複勝_購入"]) + num(x["馬連_購入"]), 0);
+    const ret = rs.reduce((s, x) => s + num(x["三連複_払戻"]) + num(x["ワイド_払戻"]) + num(x["複勝_払戻"]) + num(x["馬連_払戻"]), 0);
+    const hit = rs.filter(x => num(x["三連複_払戻"]) + num(x["ワイド_払戻"]) + num(x["複勝_払戻"]) + num(x["馬連_払戻"]) > 0).length;
     const part = k => { const b = rs.reduce((s, x) => s + num(x[k + "_購入"]), 0), r = rs.reduce((s, x) => s + num(x[k + "_払戻"]), 0); return b ? Math.round(r / b * 100) + "%" : "-"; };
-    return { label, n: rs.length, hit, buy, ret, roi: buy ? Math.round(ret / buy * 100) : null, sf: part("三連複"), wd: part("ワイド"), fk: part("複勝") };
+    return { label, n: rs.length, hit, buy, ret, roi: buy ? Math.round(ret / buy * 100) : null, sf: part("三連複"), wd: part("ワイド"), fk: part("複勝"), um: part("馬連") };
   };
-  const groups = [summ(rows, "全部"), summ(rows.filter(x => x["狙い目"] === "狙い目"), "◎狙い目"),
-    summ(rows.filter(x => x["狙い目"] !== "狙い目"), "それ以外"), summ(rows.filter(x => x["注意"]), "注意(小倉・重馬場)"),
-    summ(rows.filter(x => x["2列目"] === "芝印"), "芝印のレース")].filter(g => g.n || g.label === "全部");
+  const isD = x => x["買い方"] === "D";
+  const rc = rows.filter(x => !isD(x));
+  const groups = [summ(rows, "全部"), summ(rc, "買い方C(三連複+ワイド)"), summ(rows.filter(isD), "買い方D(馬連)"),
+    summ(rc.filter(x => x["狙い目"] === "狙い目"), "◎狙い目"),
+    summ(rc.filter(x => x["狙い目"] !== "狙い目"), "それ以外"), summ(rows.filter(x => x["注意"]), "注意(小倉・重馬場)"),
+    summ(rows.filter(x => x["2列目"] === "芝印"), "芝印のレース"),
+    summ(rows.filter(x => x["消し狙い"] === "消し狙い"), "◎消し狙い"),
+    summ(rows.filter(x => x["消し狙い"] !== "消し狙い" && x["消し"]), "それ以外の消しのレース")].filter(g => g.n || g.label === "全部");
   const days = NV === "all" ? new Set((d.kiroku || []).map(x => x["日付"])).size : 1;
   const btn = (v, l) => `<button type="button" class="${NV === v ? "primary" : ""}" data-nv="${v}" style="padding:6px 10px">${l}</button>`;
   P.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
       <h2>狙い目ごとの収支</h2><div class="simbar">${btn("today", "今日")}${btn("all", "これまで")}</div></div>
-    <div class="muted">${NV === "today" ? "今日の結果が出たレース(今の買い方:三連複+ワイド+複勝・100円ずつ)" : `これまでの記録(${days}日分・答え合わせのたびにたまります)`}</div>
-    ${rows.length ? `<div class="tblwrap"><table><thead><tr><th class="l">分け方</th><th>レース</th><th>的中</th><th>購入</th><th>払い戻し</th><th>回収率</th><th>三連複</th><th>ワイド</th><th>複勝</th></tr></thead><tbody>
+    <div class="muted">${NV === "today" ? "今日の結果が出たレース(買い方C:三連複+ワイド+複勝 / 買い方D:馬連・100円ずつ)" : `これまでの記録(${days}日分・答え合わせのたびにたまります)`}</div>
+    ${rows.length ? `<div class="tblwrap"><table><thead><tr><th class="l">分け方</th><th>レース</th><th>的中</th><th>購入</th><th>払い戻し</th><th>回収率</th><th>三連複</th><th>ワイド</th><th>複勝</th><th>馬連</th></tr></thead><tbody>
       ${groups.map(g => `<tr><td class="l">${g.label}</td><td class="num">${g.n}</td><td class="num">${g.hit}</td><td class="num">${yen(g.buy)}</td><td class="num">${yen(g.ret)}</td>
-        <td class="num ${g.roi == null ? "" : g.roi >= 100 ? "good" : "bad"}"><b>${g.roi == null ? "-" : g.roi + "%"}</b></td><td class="num muted">${g.sf}</td><td class="num muted">${g.wd}</td><td class="num muted">${g.fk}</td></tr>`).join("")}
+        <td class="num ${g.roi == null ? "" : g.roi >= 100 ? "good" : "bad"}"><b>${g.roi == null ? "-" : g.roi + "%"}</b></td><td class="num muted">${g.sf}</td><td class="num muted">${g.wd}</td><td class="num muted">${g.fk}</td><td class="num muted">${g.um}</td></tr>`).join("")}
     </tbody></table></div>` : `<div class="muted">${NV === "today" ? "今日はまだ結果が出たレースがありません。Colabで「答え合わせ」を押してから読み込み直してください" : "まだ記録がありません。「答え合わせ」を押すとたまっていきます"}</div>`}
-    <div class="muted">狙い目 = 1番人気1.9〜3.2倍・印の単勝が平均30倍以下(3年半で回収率130%前後)。数十レースたまるまでは、当たり外れで大きく上下します。</div>`;
+    <div class="muted">狙い目 = 1番人気1.9〜3.2倍・印の単勝が平均30倍以下(3年半で回収率130%前後)。買い方D = 消し条件なしのレースで馬連 1番人気-★★(3年半で135%)。狙い目・注意などの分け方は買い方Cのレースだけで数えます。数十レースたまるまでは、当たり外れで大きく上下します。</div>`;
   P.querySelectorAll("button[data-nv]").forEach(b => b.addEventListener("click", () => { NV = b.dataset.nv; renderNerai(d); }));
 }
 
@@ -432,6 +469,7 @@ function resultBlock(r) {
   return `<div class="result ${R.ret > 0 ? "win" : ""}">
     <b style="font-size:13px">結果</b>
     <div class="podium">${R.order.map((u, i) => `<span>${i + 1}着 ${u} ${nm(u)}</span>`).join("")}</div>
+    ${!r.combos.length && um(r).length ? `<div class="${R.ret > 0 ? "good" : "muted"}" style="font-weight:700">${R.ret > 0 ? `買い方D 馬連 的中:払い戻し ${yen(R.ret)}(購入 ${yen(R.cost)})` : `買い方Dの馬連は外れ(購入 ${yen(R.cost)})`}</div>` : ""}
     ${r.combos.length ? `<div class="${R.ret > 0 ? "good" : "muted"}" style="font-weight:700">${R.ret > 0 ? `三連複 的中:払い戻し ${yen(R.ret)}(購入 ${yen(R.cost)})` : `三連複は外れ(購入 ${yen(R.cost)})`}</div>` : ""}
     ${pays ? `<div class="tblwrap"><table><thead><tr><th class="l">券種</th><th class="l">組み合わせ</th><th>払い戻し(100円)</th></tr></thead><tbody>${pays}</tbody></table></div>` : ""}
   </div>`;
@@ -464,7 +502,8 @@ function tenkaiBlock(r) {
   return `<div class="tenkai">
     <div class="head">
       <b style="font-size:13px">展開の予想</b>
-      ${pc ? `<span class="pace ${pc.cls}">${pc.label}</span>
+      ${r.nk ? `<span class="pace ${({ H: "hi", M: "mid", S: "slow" })[r.nk] || ""}">netkeiba:${TS_PACES[r.nk] || esc(r.nk)}</span>` : ""}
+      ${pc ? `<span class="pace ${pc.cls}">AI:${pc.label}</span>
         <span class="muted">逃げ候補 ${r.pace.nige}頭 ・ 逃げ+先行 ${r.pace.front}頭(脚質が分かる ${r.pace.known}頭のうち ${pct(pc.share, 0)})</span>` : `<span class="muted">脚質が分かる馬がいません</span>`}
     </div>
     <div class="arrow">◀ 前(先頭) ・・・・・・・・・・ 後ろ ▶</div>
@@ -482,6 +521,408 @@ function tenkaiBlock(r) {
   </div>`;
 }
 
+// ---------- 展開シミュレーション(ペースを選んで、レースの流れを画面で再現する) ----------
+// 1) 各馬の位置取り:最近5走の脚質の割合(sr)から、その回の脚質をくじ引きで決め、少しぶれを足す
+// 2) 着順:AI勝率(pw)を土台に、選んだペースが「AIの予想したペース」とどれだけ違うかで、前の馬・後ろの馬の強さを少し動かす
+//    (AIの勝率は、予想どおりのペースになる前提の数字なので、予想と同じペースを選べば AIの勝率そのままになる)
+// 3) 1角 → 向正面 → 3〜4角 → 直線 → ゴールで、位置取りを着順の方へ少しずつ入れかえて動かす
+const TS_PACES = { S: "スロー", M: "平均", H: "ハイ" };
+// ペースによる強さの上げ下げ(逃げ・先行・差し・追込の順。対数の単位)
+// 検証56:2023〜2026年の平地1.24万レースで、実際のペース × 1コーナーの位置ごとに「勝ち数 ÷ オッズから見た勝ち数」を測った値(〜2025年と2026年で同じ向き)
+const TS_PADJ = { S: [0.16, 0.09, -0.22, -0.31], M: [0, 0, 0, 0], H: [-0.20, -0.10, 0.11, 0.36] };
+// 脚質1つぶんの差が何馬身か(縦長になりやすさ)。検証56:残り600mで追込の馬は先頭から スロー8.4 / 平均9.4 / ハイ10.9馬身うしろ
+const TS_SPREAD = { S: 2.55, M: 2.85, H: 3.3 };
+const TS_PHASE = [
+  { t: 0.00, name: "スタート", mix: 0 },
+  { t: 0.22, name: "1コーナー", mix: 0 },
+  { t: 0.48, name: "向正面", mix: 0.05 },
+  { t: 0.70, name: "3〜4コーナー", mix: 0.35 },
+  { t: 0.86, name: "直線入口", mix: 0.65 },
+  { t: 1.00, name: "ゴール", mix: 1 }
+];
+const TS_WAKU = ["#f2f2f2", "#222222", "#d63a2f", "#2f62c9", "#e8c531", "#2f9e4f", "#ee8a1f", "#f08fb5"];
+const TS_WAKU_TX = ["#222", "#fff", "#fff", "#fff", "#222", "#fff", "#222", "#222"];
+const TS_RIGHT = new Set(["札幌", "函館", "福島", "中山", "阪神", "京都", "小倉"]);
+const TSIM = {};      // レースごとの状態(選んだペース・最後の1回・アニメの位置)
+
+function tsWaku(u, n) {
+  if (n <= 8) return u;
+  const base = Math.floor(n / 8), extra = n % 8;
+  let k = 0;
+  for (let w = 1; w <= 8; w++) {
+    k += base + (w > 8 - extra ? 1 : 0);
+    if (u <= k) return w;
+  }
+  return 8;
+}
+function tsStyleProb(h) {
+  if (h.sr && h.sr.some(v => v)) {
+    const a = h.sr.map(v => (v || 0) + 0.15), t = a.reduce((x, y) => x + y, 0);
+    return a.map(v => v / t);
+  }
+  if (h.st != null) { const a = [0.05, 0.05, 0.05, 0.05]; a[h.st] = 0.85; return a; }
+  return [0.08, 0.30, 0.37, 0.25];
+}
+function tsInterp(arr, x) {                       // x(0〜3の位置)に合わせて、脚質ごとの値をなめらかにつなぐ
+  const c = Math.max(0, Math.min(3, x)), i = Math.min(2, Math.floor(c)), f = c - i;
+  return arr[i] * (1 - f) + arr[i + 1] * f;
+}
+function tsPredPace(r) {
+  const pc = paceOf(r);
+  return pc ? pc.short : "M";
+}
+const tsGumbel = () => -Math.log(-Math.log(Math.random() * 0.999999 + 0.0000005));
+
+// 1回分のレースを作る(位置は「先頭から何馬身うしろか」で持つ)
+function tsRunOnce(r, pace) {
+  const hs = r.horses, n = hs.length, pred = tsPredPace(r);
+  const spread = TS_SPREAD[pace];
+  const H = hs.map((h, i) => {
+    const sp = tsStyleProb(h);
+    let x = Math.random(), s = 0;
+    while (s < 3 && x > sp[s]) { x -= sp[s]; s++; }
+    const ep = s + (Math.random() - 0.5) * 0.9 + (tsWaku(h.u, n) - 4.5) * 0.03;   // 内枠ほどわずかに前
+    const adj = tsInterp(TS_PADJ[pace], ep) - tsInterp(TS_PADJ[pred], ep);
+    const pw = (h.pw == null || isNaN(h.pw)) ? 1e-4 : Math.max(h.pw, 1e-4);
+    return { i, u: h.u, s, ep, sc: Math.log(pw) + adj + tsGumbel() };
+  });
+  // 道中の隊列:脚質の位置(ep)の差 × 縦長さ
+  const byEp = [...H].sort((a, b) => a.ep - b.ep);
+  byEp.forEach(x => { x.mid = Math.max(0, x.ep - byEp[0].ep) * spread + Math.random() * 0.4; x.lane = 0; });
+  // 同じくらいの位置の馬は外に並ぶ
+  byEp.forEach((x, k) => {
+    let lane = 0;
+    for (let j = 0; j < k; j++) if (Math.abs(byEp[j].mid - x.mid) < 0.9 && byEp[j].lane === lane) lane++;
+    x.lane = Math.min(lane, 4);
+  });
+  // ゴールの着差:強さの差を馬身に
+  const byFin = [...H].sort((a, b) => b.sc - a.sc);
+  let acc = 0;
+  byFin.forEach((x, k) => {
+    if (k) acc += Math.min(5, Math.max(0.1, (byFin[k - 1].sc - x.sc) * 1.3));
+    x.fin = acc; x.rank = k + 1;
+  });
+  // 直線は外に持ち出す馬も出る
+  byFin.forEach(x => { x.laneF = Math.min(7, x.lane + (x.s >= 2 ? 2 + Math.floor(Math.random() * 3) : Math.floor(Math.random() * 2))); });
+  return { pace, H, byFin };
+}
+// 進み具合 t(0〜1)での位置(先頭から何馬身うしろか)と内外
+function tsPosAt(run, t) {
+  let k = 0;
+  while (k < TS_PHASE.length - 2 && t > TS_PHASE[k + 1].t) k++;
+  const a = TS_PHASE[k], b = TS_PHASE[k + 1];
+  const f = Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t)));
+  const e = f * f * (3 - 2 * f);
+  const startF = Math.min(1, t / TS_PHASE[1].t);        // スタート直後は横一線から広がる
+  const out = run.H.map(x => {
+    const m = a.mix + (b.mix - a.mix) * e;
+    let beh = x.mid * (1 - m) + x.fin * m;
+    if (t < TS_PHASE[1].t) beh *= startF * startF;
+    const lane = t < TS_PHASE[1].t ? (tsWaku(x.u, run.H.length) - 1) * (1 - startF) + x.lane * startF
+      : t < TS_PHASE[3].t ? x.lane : x.lane + (x.laneF - x.lane) * Math.min(1, (t - TS_PHASE[3].t) / (TS_PHASE[4].t - TS_PHASE[3].t));
+    return { u: x.u, beh, lane };
+  });
+  const min = Math.min(...out.map(o => o.beh));
+  out.forEach(o => { o.beh -= min; });
+  return out;
+}
+// 1400m以下は向正面からのスタートで1コーナーがないので、呼び方を変える
+function tsNames(r) {
+  return (r.distance || 1600) <= 1400 ? ["スタート", "先行争い", "向正面", "3〜4コーナー", "直線入口", "ゴール"] : TS_PHASE.map(p => p.name);
+}
+function tsPhaseName(r, t) {
+  let k = 0;
+  TS_PHASE.forEach((p, i) => { if (t >= p.t - 0.02) k = i; });
+  return tsNames(r)[k];
+}
+// 隊列を新聞の展開図のような文字にする(1馬身以内はひとかたまり)
+function tsLine(pos, th = 1.0) {
+  const s = [...pos].sort((a, b) => a.beh - b.beh || a.lane - b.lane);
+  const groups = [];
+  s.forEach((o, k) => {
+    if (k && o.beh - s[k - 1].beh <= th) groups[groups.length - 1].push(o.u);
+    else groups.push([o.u]);
+  });
+  return groups.map(g => g.length > 1 ? `(${g.join(",")})` : `${g[0]}`).join(" ・ ");
+}
+
+function tenkaiSimBlock(r) {
+  if (!r.horses.some(h => "st" in h)) return "";
+  const st = TSIM[r.id] || (TSIM[r.id] = { pace: tsPredPace(r) });
+  const pred = tsPredPace(r);
+  return `<div class="tsim">
+    <div class="head"><b style="font-size:13px">展開シミュレーション</b>
+      <span class="muted">AIの予想ペース:<b>${TS_PACES[pred]}</b>${r.nk ? ` ・ netkeiba(nk)の予想:<b>${TS_PACES[r.nk] || esc(r.nk)}</b>` : ""}</span></div>
+    <div class="tsbar">
+      <div class="seg" role="group" aria-label="ペース">${["S", "M", "H"].map(p => `<button type="button" class="tsPace ${st.pace === p ? "on" : ""}" data-p="${p}">${TS_PACES[p]}${p === pred ? "(AI)" : ""}${p === r.nk ? "(nk)" : ""}</button>`).join("")}</div>
+      <button class="primary" type="button" id="tsGo">走らせる</button>
+      <button type="button" id="tsSpeed" title="再生の速さ">×1</button>
+      <button type="button" id="tsView" title="表示の切り替え">${st.view === "strip" ? "コース表示にする" : "横一列表示にする"}</button>
+    </div>
+    <div class="tsstage">
+      <svg id="tsOval" viewBox="0 0 220 120" aria-label="コース全体の中の、今の位置"></svg>
+      <div class="tsinfo"><div id="tsPhase" class="tsphase">スタート前</div><div id="tsRemain" class="muted"></div></div>
+    </div>
+    <svg id="tsStrip" class="tsstrip" viewBox="0 0 640 170" aria-label="隊列"></svg>
+    <div id="tsSnap" class="tssnap"></div>
+    <div class="tsbar"><button type="button" id="tsMany">ペース別の勝率を比べる(各2万回)</button></div>
+    <div id="tsTable"></div>
+    <div class="muted">走らせるたびに、くじ引きで違う展開になります(1回分の例)。位置取りは最近5走の脚質の割合から、着順はAI勝率をもとに、選んだペースが予想と違うときだけ前の馬・後ろの馬の強さを動かしています。予想ペースを選ぶと、勝率はAI勝率と同じになります。上げ下げの大きさと隊列の開きは、過去1.24万レースから測った数字です(検証56:たとえばハイペースになると追込は勝ちが1.4倍、逃げは0.8倍)。ただしペースはレース前には分からず、検証(㊱)では展開の向き不向きはオッズにほぼ織り込み済みでした。<b>買い目を決めるものではなく、レースの流れをイメージするための道具</b>です。</div>
+  </div>`;
+}
+
+function initTenkaiSim(r) {
+  if (!$("tsGo")) return;
+  const st = TSIM[r.id];
+  st.speed = st.speed || 1;
+  document.querySelectorAll(".tsPace").forEach(b => b.addEventListener("click", () => {
+    st.pace = b.dataset.p;
+    document.querySelectorAll(".tsPace").forEach(x => x.classList.toggle("on", x === b));
+    tsPlay(r);
+  }));
+  $("tsGo").addEventListener("click", () => tsPlay(r));
+  $("tsSpeed").textContent = "×" + st.speed;
+  $("tsSpeed").addEventListener("click", () => { st.speed = st.speed === 1 ? 2 : st.speed === 2 ? 4 : 1; $("tsSpeed").textContent = "×" + st.speed; });
+  $("tsMany").addEventListener("click", () => tsMany(r));
+  $("tsView").addEventListener("click", () => {
+    st.view = st.view === "strip" ? "track" : "strip";
+    $("tsView").textContent = st.view === "strip" ? "コース表示にする" : "横一列表示にする";
+    tsDraw(r, st.run || null, st.run ? (st.tNow == null ? 1 : st.tNow) : 0);
+  });
+  tsDrawOval(r, 0, null);
+  if (st.run) { tsDraw(r, st.run, 1); tsSnap(r, st.run); } else tsDraw(r, null, 0);
+  if (st.table) $("tsTable").innerHTML = st.table;
+}
+
+function tsPlay(r) {
+  const st = TSIM[r.id];
+  cancelAnimationFrame(st.raf);
+  const run = tsRunOnce(r, st.pace);
+  st.run = run;
+  $("tsSnap").innerHTML = "";
+  const DUR = 14000;
+  let last = performance.now(), t = 0;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) { tsDraw(r, run, 1); tsSnap(r, run); return; }
+  const frame = now => {
+    if (!$("tsStrip")) return;                         // 別のレースを開いたら止める
+    t = Math.min(1, t + (now - last) / DUR * st.speed);
+    last = now;
+    tsDraw(r, run, t);
+    if (t < 1) st.raf = requestAnimationFrame(frame);
+    else tsSnap(r, run);
+  };
+  st.raf = requestAnimationFrame(frame);
+}
+
+function tsDrawOval(r, t, run) {
+  const svg = $("tsOval");
+  if (!svg) return;
+  const right = TS_RIGHT.has(r.venue);
+  const cx = 110, cy = 60, L = 120, R = 38;                 // 直線の長さとカーブの半径
+  const per = 2 * L + 2 * Math.PI * R;
+  const pt = p => {                                          // 周の上の点(p は 0〜1。0 はゴール板)
+    let d = ((p % 1) + 1) % 1 * per, x, y;
+    if (d < L / 2) { x = cx + d; y = cy + R; }              // ホームストレッチ(ゴール板から先)
+    else if ((d -= L / 2) < Math.PI * R) { const a = d / R; x = cx + L / 2 + R * Math.sin(a); y = cy + R * Math.cos(a); }
+    else if ((d -= Math.PI * R) < L) { x = cx + L / 2 - d; y = cy - R; }
+    else if ((d -= L) < Math.PI * R) { const a = d / R; x = cx - L / 2 - R * Math.sin(a); y = cy - R * Math.cos(a); }
+    else { d -= Math.PI * R; x = cx - L / 2 + d; y = cy + R; }
+    if (right) x = 2 * cx - x;                               // 上から見て右回りは時計回り(スタンド前の直線を右から左へ走る)
+    return [x, y];
+  };
+  // 周の長さを 1800m とみなし、ゴール板の手前「距離」ぶんの所をスタートにする(左回り・右回りで向きを合わせる)
+  const lap = 1800, dist = r.distance || 1600;
+  const pOf = (tt, behLen) => -(dist * (1 - tt) + behLen * 2.4) / lap;
+  let path = "";
+  for (let k = 0; k <= 120; k++) { const [x, y] = pt(k / 120); path += (k ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }
+  const [gx, gy] = pt(0);
+  let dots = "";
+  if (run) {
+    tsPosAt(run, t).forEach(o => {
+      const [x, y] = pt(pOf(t, o.beh));
+      const w = tsWaku(o.u, run.H.length) - 1;
+      dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${TS_WAKU[w]}" stroke="var(--ink)" stroke-width=".5"/>`;
+    });
+  } else {
+    const [sx, sy] = pt(pOf(0, 0));
+    dots = `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="3.5" fill="var(--gold)"/><text x="${sx.toFixed(1)}" y="${(sy - 6).toFixed(1)}" class="tslab" text-anchor="middle">スタート</text>`;
+  }
+  svg.innerHTML = `<path d="${path}Z" fill="none" stroke="var(--turf-soft)" stroke-width="12"/>
+    <path d="${path}Z" fill="none" stroke="var(--turf)" stroke-width="1" opacity=".5"/>
+    <line x1="${gx}" y1="${gy - 8}" x2="${gx}" y2="${gy + 8}" stroke="var(--bad)" stroke-width="2"/>
+    <text x="${gx}" y="${gy + 18}" class="tslab" text-anchor="middle">ゴール</text>
+    <text x="${cx}" y="${cy + 4}" class="tslab" text-anchor="middle">${esc(r.venue)}${esc(r.surface || "")}${r.distance ? r.distance + "m" : ""}・${right ? "右回り" : "左回り"}</text>${dots}`;
+}
+
+// ===== コース表示:JRAの中継の隊列図のように、コースの形にそって馬を置く(コーナーでは斜め〜縦に並ぶ) =====
+// 位置の決め方は小さいコース図と同じ(1周1800m・1馬身2.4m)。画面は馬群を追いかけて拡大する
+const TS_LAP = 1800, TS_BL = 2.4, TS_LANE = 2.3, TS_TW = 20;   // 1周・1馬身・1頭ぶんの横幅・コースの幅(m)
+function tsGeom(right) {
+  const L = 450, R = (TS_LAP - 2 * L) / (2 * Math.PI);
+  const pt = p => {                                         // 内ラチの上の点(p は 0〜1。0 はゴール板)
+    let d = ((p % 1) + 1) % 1 * TS_LAP, x, y;
+    if (d < L / 2) { x = d; y = R; }
+    else if ((d -= L / 2) < Math.PI * R) { const a = d / R; x = L / 2 + R * Math.sin(a); y = R * Math.cos(a); }
+    else if ((d -= Math.PI * R) < L) { x = L / 2 - d; y = -R; }
+    else if ((d -= L) < Math.PI * R) { const a = d / R; x = -L / 2 - R * Math.sin(a); y = -R * Math.cos(a); }
+    else { d -= Math.PI * R; x = -L / 2 + d; y = R; }
+    if (right) x = -x;                                      // 右回りは時計回り
+    return [x, y];
+  };
+  const out = (x, y) => {                                   // 外側に向かう向き
+    const qx = Math.max(-L / 2, Math.min(L / 2, x)), dx = x - qx, dy = y, n = Math.hypot(dx, dy) || 1;
+    return [dx / n, dy / n];
+  };
+  const at = (p, off) => { const [x, y] = pt(p), [nx, ny] = out(x, y); return [x + nx * off, y + ny * off]; };
+  return { pt, out, at };
+}
+function tsDrawTrack(r, run, t, svg) {
+  const G = tsGeom(TS_RIGHT.has(r.venue));
+  const dist = r.distance || 1600, AR = 640 / 170;
+  const pOf = (tt, beh) => -(dist * (1 - tt) + beh * TS_BL) / TS_LAP;
+  // 馬の位置
+  const pos = run ? tsPosAt(run, t).map(o => {
+    const [x, y] = G.at(pOf(t, o.beh), 1.4 + o.lane * TS_LANE);
+    return { ...o, x, y };
+  }) : [];
+  // カメラ:馬群がおさまるように、まわりを少し空けて拡大
+  const ref = pos.length ? pos : [{ x: G.at(pOf(0, 0), 8)[0], y: G.at(pOf(0, 0), 8)[1] }];
+  const xs = ref.map(o => o.x), ys = ref.map(o => o.y);
+  const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const w = Math.max(70, Math.max(...xs) - Math.min(...xs) + 26, (Math.max(...ys) - Math.min(...ys) + 26) * AR), h = w / AR;
+  svg.setAttribute("viewBox", `${(mx - w / 2).toFixed(2)} ${(my - h / 2).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
+  const u = w / 640;                                        // 画面の1px が何mか
+  const rr = Math.max(1.25, 9 * u), fs = Math.max(1.5, 10 * u), ls = 11 * u;
+  // コース(芝の帯・内ラチ・外ラチ)を、見えている所だけ細かく描く
+  const line = off => { let s = ""; for (let k = 0; k <= 720; k++) { const [x, y] = G.at(k / 720, off); s += (k ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); } return s + "Z"; };
+  let g = `<path d="${line(TS_TW / 2)}" fill="none" stroke="var(--card)" stroke-opacity=".55" stroke-width="${TS_TW}"/>
+    <path d="${line(0)}" fill="none" stroke="var(--ink)" stroke-width="${(1.2 * u).toFixed(2)}"/>
+    <path d="${line(TS_TW)}" fill="none" stroke="var(--ink)" stroke-opacity=".5" stroke-width="${(1 * u).toFixed(2)}"/>`;
+  // 残り距離の目印とゴール板
+  for (let m = 200; m < Math.min(dist, TS_LAP - 100); m += 200) {      // 1周より長いレースは、ゴール前の1周ぶんだけ
+    const [x1, y1] = G.at(-m / TS_LAP, 0), [x2, y2] = G.at(-m / TS_LAP, -3), [x3, y3] = G.at(-m / TS_LAP, -7);
+    g += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="${(1 * u).toFixed(2)}"/>
+      <text x="${x3}" y="${y3}" style="font-size:${ls}px" class="tslab" text-anchor="middle" dominant-baseline="middle">${m}</text>`;
+  }
+  { const [x1, y1] = G.at(0, -2), [x2, y2] = G.at(0, TS_TW + 2), [x3, y3] = G.at(0, TS_TW + 6);
+    g += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--bad)" stroke-width="${(2.5 * u).toFixed(2)}"/>
+      <text x="${x3}" y="${y3}" style="font-size:${ls}px" class="tslab" text-anchor="middle" dominant-baseline="middle">ゴール</text>`; }
+  if (!run) {
+    const [x, y] = G.at(pOf(0, 0), TS_TW / 2);
+    g += `<text x="${x}" y="${y}" style="font-size:${ls}px" class="tslab" text-anchor="middle">スタート(「走らせる」を押すと馬が出ます)</text>`;
+    svg.innerHTML = g;
+    return;
+  }
+  const axis = r.axis, himo = r.himo || [];
+  const res = run.H.reduce((m, x) => (m[x.u] = x, m), {});
+  pos.sort((a, b) => b.lane - a.lane || b.beh - a.beh).forEach(o => {
+    const wk = tsWaku(o.u, run.H.length) - 1;
+    const ring = o.u === axis ? "var(--turf)" : himo.includes(o.u) ? "var(--gold)" : "var(--ink)";
+    const rw = (o.u === axis || himo.includes(o.u) ? 2.5 : 0.8) * u;
+    g += `<g><circle cx="${o.x.toFixed(2)}" cy="${o.y.toFixed(2)}" r="${rr.toFixed(2)}" fill="${TS_WAKU[wk]}" stroke="${ring}" stroke-width="${rw.toFixed(2)}"/>
+      <text x="${o.x.toFixed(2)}" y="${o.y.toFixed(2)}" style="font-size:${fs.toFixed(2)}px" class="tsnum" text-anchor="middle" dominant-baseline="central" fill="${TS_WAKU_TX[wk]}">${o.u}</text>`;
+    if (t >= 1 && res[o.u].rank <= 3) {
+      const [nx, ny] = G.out(o.x, o.y);
+      g += `<text x="${(o.x + nx * rr * 2.4).toFixed(2)}" y="${(o.y + ny * rr * 2.4).toFixed(2)}" style="font-size:${(11 * u).toFixed(2)}px" class="tsrank" text-anchor="middle" dominant-baseline="central">${res[o.u].rank}着</text>`;
+    }
+    g += `</g>`;
+  });
+  svg.innerHTML = g;
+}
+
+function tsDraw(r, run, t) {
+  const svg = $("tsStrip");
+  if (!svg) return;
+  tsDrawOval(r, t, run);
+  const W = 640, Hh = 170, top = 26, laneH = 16, padR = 40;
+  const dist = r.distance || 1600;
+  $("tsPhase").textContent = run ? tsPhaseName(r, t) : "スタート前";
+  $("tsRemain").textContent = run ? (t < 1 ? `残り ${Math.max(0, Math.round(dist * (1 - t) / 50) * 50)}m` : `${TS_PACES[run.pace]}ペースの1回分`) : `${TS_PACES[TSIM[r.id].pace]}ペースで走らせます`;
+  const stv = TSIM[r.id];
+  stv.tNow = t;
+  if (stv.view !== "strip") { tsDrawTrack(r, run, t, svg); return; }
+  svg.setAttribute("viewBox", "0 0 640 170");
+  if (!run) {
+    svg.innerHTML = `<text x="${W / 2}" y="${Hh / 2}" class="tslab" text-anchor="middle">「走らせる」を押すと、ここに隊列が出ます(${TS_RIGHT.has(r.venue) ? "右回りなので左が前" : "左回りなので右が前"})</text>`;
+    return;
+  }
+  const pos = tsPosAt(run, t);
+  const maxB = Math.max(12, ...pos.map(o => o.beh)) + 1.5;
+  const rv = TS_RIGHT.has(r.venue);                  // 右回りはスタンド前を右から左へ走るので左が前、左回りは右が前
+  const sx = b => rv ? padR + b / maxB * (W - padR - 30) : W - padR - b / maxB * (W - padR - 30);
+  let g = "";
+  for (let b = 0; b <= maxB; b += maxB > 30 ? 10 : 5) {
+    const x = sx(b);
+    g += `<line x1="${x}" y1="${top - 6}" x2="${x}" y2="${Hh - 8}" stroke="var(--line)"/><text x="${x}" y="${top - 10}" class="tslab" text-anchor="middle">${b ? b + "馬身" : "先頭"}</text>`;
+  }
+  const lx = rv ? W - 10 : 10, la = rv ? "end" : "start";
+  g += `<text x="${lx}" y="${top + 4}" class="tslab" text-anchor="${la}">内</text><text x="${lx}" y="${Hh - 12}" class="tslab" text-anchor="${la}">外</text>`;
+  const axis = r.axis, himo = r.himo || [];
+  const res = run.H.reduce((m, x) => (m[x.u] = x, m), {});
+  pos.sort((a, b) => b.lane - a.lane).forEach(o => {
+    const x = sx(o.beh), y = top + 6 + o.lane * laneH;
+    const w = tsWaku(o.u, run.H.length) - 1;
+    const ring = o.u === axis ? "var(--turf)" : himo.includes(o.u) ? "var(--gold)" : "var(--ink)";
+    const rw = o.u === axis || himo.includes(o.u) ? 2.5 : 0.8;
+    g += `<g><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="${TS_WAKU[w]}" stroke="${ring}" stroke-width="${rw}"/>
+      <text x="${x.toFixed(1)}" y="${(y + 3.5).toFixed(1)}" class="tsnum" text-anchor="middle" fill="${TS_WAKU_TX[w]}">${o.u}</text>
+      ${t >= 1 && res[o.u].rank <= 3 ? `<text x="${(x + (rv ? -13 : 13)).toFixed(1)}" y="${(y + 4).toFixed(1)}" class="tsrank" text-anchor="${rv ? "end" : "start"}">${res[o.u].rank}着</text>` : ""}</g>`;
+  });
+  svg.innerHTML = g;
+}
+
+function tsSnap(r, run) {
+  const name = u => (r.horses.find(h => h.u === u) || {}).name || "";
+  const nm = tsNames(r), at = [[nm[1], 0.22], [nm[3], 0.70], ["ゴール", 1]];
+  const top3 = run.byFin.slice(0, 3);
+  const key = top3.map(x => x.u).sort((a, b) => a - b).join("-");
+  const hit = (r.combos || []).find(cb => cb.c.join("-") === key);
+  const uk = top3.slice(0, 2).map(x => x.u).sort((a, b) => a - b);
+  const uhit = um(r).some(x => [...x].sort((a, b) => a - b).join("-") === uk.join("-"));
+  $("tsSnap").innerHTML = `<div class="tsrows">${at.map(([lab, t]) => `<div><span class="k">${lab}</span><span class="num">${tsLine(tsPosAt(run, t), t >= 1 ? 0.3 : 1.0)}</span></div>`).join("")}</div>
+    <div class="once" style="margin-top:6px">1着 ${top3[0].u} ${esc(name(top3[0].u))}<br>2着 ${top3[1].u} ${esc(name(top3[1].u))}<br>3着 ${top3[2].u} ${esc(name(top3[2].u))}<br>
+    <span class="${hit || uhit ? "good" : "muted"}" style="font-size:14px">${r.combos.length ? (hit ? `三連複 ${key} 的中${hit.odds ? `(${hit.odds}倍)` : ""}` : "三連複は外れ") : um(r).length ? (uhit ? `馬連 ${uk.join("-")} 的中` : "馬連は外れ") : "このレースは買わない"}</span></div>
+    <div class="muted">隊列は左から前の順です。( )は道中は1馬身以内、ゴールはクビ差以内でかたまっている馬。</div>`;
+}
+
+function tsMany(r) {
+  const N = 20000, n = r.horses.length;
+  const btn = $("tsMany"); btn.disabled = true; btn.textContent = "回しています…";
+  setTimeout(() => {
+    const out = {};
+    ["S", "M", "H"].forEach(p => {
+      const w = new Float64Array(n), t3 = new Float64Array(n);
+      let hit = 0;
+      const buy = new Set((r.combos || []).map(cb => cb.c.join("-")));
+      for (let k = 0; k < N; k++) {
+        const run = tsRunOnce(r, p);
+        w[run.byFin[0].i]++;
+        for (let j = 0; j < 3; j++) t3[run.byFin[j].i]++;
+        if (buy.size && buy.has(run.byFin.slice(0, 3).map(x => x.u).sort((a, b) => a - b).join("-"))) hit++;
+      }
+      out[p] = { w, t3, hit: buy.size ? hit / N : null };
+    });
+    const pred = tsPredPace(r);
+    const cell = (v, base) => {
+      const d = v - base, cls = d > 0.02 ? "good" : d < -0.02 ? "bad" : "";
+      return `<td class="num ${cls}">${pct(v)}</td>`;
+    };
+    const rows = r.horses.map((h, i) => ({ h, i })).sort((a, b) => out[pred].w[b.i] - out[pred].w[a.i]);
+    const html = `<div class="tblwrap"><table><thead>
+      <tr><th rowspan="2">馬番</th><th class="l" rowspan="2">馬名</th><th rowspan="2">脚質</th><th colspan="3">勝率</th><th colspan="3">3着内率</th></tr>
+      <tr>${["S", "M", "H"].map(p => `<th>${TS_PACES[p]}${p === pred ? "*" : ""}</th>`).join("")}${["S", "M", "H"].map(p => `<th>${TS_PACES[p]}${p === pred ? "*" : ""}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(({ h, i }) => `<tr class="${h.u === r.axis ? "isax" : (r.himo || []).includes(h.u) ? "isww" : ""}"><td class="num">${h.u}</td><td class="l">${esc(h.name)}</td><td>${stChip(h.st)}</td>
+        ${["S", "M", "H"].map(p => cell(out[p].w[i] / N, out[pred].w[i] / N)).join("")}
+        ${["S", "M", "H"].map(p => cell(out[p].t3[i] / N, out[pred].t3[i] / N)).join("")}</tr>`).join("")}</tbody></table></div>
+      ${(r.combos || []).length ? `<div class="muted">三連複の買い目が当たる割合:${["S", "M", "H"].map(p => `${TS_PACES[p]} <b>${pct(out[p].hit)}</b>`).join(" / ")}</div>` : ""}
+      <div class="muted">*は予想ペース。予想ペースより2ポイント以上上がった数字は緑、下がった数字は赤です。</div>`;
+    TSIM[r.id].table = html;
+    $("tsTable").innerHTML = html;
+    btn.disabled = false; btn.textContent = "ペース別の勝率を比べる(もう一度)";
+  }, 30);
+}
+
 // ---------- 1レースの詳細とシミュレーション ----------
 function renderDetail() {
   const D = $("detail");
@@ -497,7 +938,11 @@ function renderDetail() {
       <h2>${esc(r.post)} ${esc(r.venue)}${r.no}R ${esc(r.name)}</h2>
       <div class="muted">${esc(r.surface)}${r.distance ? r.distance + "m" : ""}${r.going ? " ・ " + esc(r.going) : ""} ・ ${hs.length}頭 ・ 三連複:軸 ${r.axis} / 2列目 ${esc(r.label || "★★")} ${r.himo.join("・") || "なし"} / 3列目 ${r.third.filter(u => !r.himo.includes(u)).join(" ") || "なし"}</div>
     </div>
-    ${r.skip ? `<div class="status">このレースは<b>見送り</b>です(${esc(r.skip)})。3年半の検証で、この条件では毎年負けていました。</div>` : ""}
+    ${um(r).length ? `<div class="status good">このレースは<b>買い方D</b>です(軸も1番人気も消し条件なし=1番人気を信じてよいレース)。<b>馬連 1番人気-${esc(r.label || "★★")}</b>を買います(3年半で135%・〜2025年132%・2026年144%)。</div>
+    <div class="tiles"><div class="tile"><span class="k">馬連(1番人気-${esc(r.label || "★★")})</span><span class="v num" style="font-size:16px">${um(r).map(x => x.join("-")).join(" ")}</span></div>
+      <div class="tile"><span class="k">合計(100円ずつ)</span><span class="v" style="font-size:16px">¥${(um(r).length * 100).toLocaleString()}</span></div></div>` : ""}
+    ${furyo(r) ? `<div class="status">馬場が<b>不良</b>です。不良馬場では、単勝10〜50倍の馬が同じオッズの馬より1〜2割多く3着内に来ています(3年半・〜2025年も2026年も)。とくにタイム指数がメンバー平均より少し上の馬(下の表で「不良◎」)。ただし複勝の回収率は98〜101%のトントンなので、買い目ではなく<b>参考の目印</b>です。${hs.some(h => furyoPick(r, h)) ? "" : hs.some(h => h.ti != null) ? "このレースには当てはまる馬がいません。" : "(この予想ファイルにはタイム指数が入っていないので、「不良◎」は次の予想から出ます)"}</div>` : ""}
+    ${r.skip && !um(r).length ? `<div class="status">このレースは<b>見送り</b>です(${esc(r.skip)})。3年半の検証で、この条件では${r.skip.startsWith("消し条件なし") ? "三連複89%・ワイド101%と負けかトントンでした" : "毎年負けていました"}。</div>` : ""}
     ${r.combos.length ? `<div class="tiles">
       <div class="tile"><span class="k">三連複(軸-${esc(r.label || "★★")}-3列目)</span><span class="v" style="font-size:16px">${r.combos.length}点</span></div>
       ${(r.wide || []).length ? `<div class="tile"><span class="k">ワイド(軸-${esc(r.label || "★★")})</span><span class="v num" style="font-size:16px">${r.wide.map(w => w.join("-")).join(" ")}</span></div>` : ""}
@@ -505,9 +950,11 @@ function renderDetail() {
       <div class="tile"><span class="k">合計(100円ずつ)</span><span class="v" style="font-size:16px">¥${((r.combos.length + (r.wide || []).length + (r.fuku || []).length) * 100).toLocaleString()}</span></div>
     </div>` : ""}
     ${r.combos.length && (r.nerai || r.chui || r.fav_odds != null) ? `<div class="${r.nerai ? "good" : "muted"}" style="font-size:13px">${r.nerai ? "<b>◎狙い目</b>:" : ""}1番人気 ${r.fav_odds != null ? r.fav_odds.toFixed(1) + "倍" : "-"} ・ 印の単勝 平均${r.mark_odds != null ? r.mark_odds.toFixed(1) + "倍" : "-"}${r.nerai ? "(1番人気1.9〜3.2倍・印30倍以下:3年半で回収率130%前後)" : "(狙い目は 1番人気1.9〜3.2倍・印30倍以下)"}${r.chui ? ` ・ <span class="bad">注意:${esc(r.chui)}(3年半で回収率54〜63%)</span>` : ""}</div>` : ""}
+    ${r.combos.length && r.keshi ? `<div class="${r.kn ? "good" : "muted"}" style="font-size:13px">${r.kn ? "<b>◎消し狙い</b>:" : ""}消し条件 ${esc(r.keshi)}(人気馬が買われすぎで、ほかの馬の配当が上がりやすいレース${r.kn ? "。軸が昇級か休み明けは3年半で三連複205%・ワイド150%" : ""})</div>` : ""}
     ${r.label === "芝印" && r.combos.length ? `<div class="muted">軟らかい芝なので、2列目は★★の代わりに「芝印」(単勝10〜100倍・先行/軽め/体重減/前走0.7〜1.2秒差のうち3つ以上・逃げ/体重増/前走最後方なし)です。</div>` : ""}
     ${resultBlock(r)}
     ${tenkaiBlock(r)}
+    ${tenkaiSimBlock(r)}
     <div class="simbar">
       <label for="simN" class="muted">回数</label>
       <select id="simN"><option value="10000">1万回</option><option value="100000" selected>10万回</option><option value="300000">30万回</option></select>
@@ -520,7 +967,7 @@ function renderDetail() {
       <thead><tr><th>馬番</th><th class="l">馬名・騎手</th><th>印</th>${hasSt ? '<th class="l">脚質(最近5走)</th><th class="l">展開</th>' : ""}<th>単勝</th><th>AI勝率</th><th>AI複勝率</th><th>1着</th><th>2着内</th><th>3着内</th><th>着順</th></tr></thead>
       <tbody>${hs.map(h => `<tr class="${h.u === r.axis ? "isax" : r.himo.includes(h.u) ? "isww" : ""}" data-u="${h.u}">
         <td class="num">${h.u}</td><td class="l">${esc(h.name)}${h.jk ? `<br><span class="muted" style="font-size:11px">${esc(h.jk)}${h.jk3 != null ? ` (3着内${Math.round(h.jk3 * 100)}%)` : ""}</span>` : ""}</td>
-        <td>${h.u === r.axis ? '<span class="chip ax">軸</span>' : ""}${h.mark ? `<span class="chip ${h.mark === "★★" || h.mark === "芝印" ? "ww" : "jump"}">${esc(h.mark)}</span>` : ""}</td>
+        <td>${h.u === r.axis ? '<span class="chip ax">軸</span>' : ""}${h.mark ? `<span class="chip ${h.mark === "★★" || h.mark === "芝印" ? "ww" : "jump"}">${esc(h.mark)}</span>` : ""}${furyoPick(r, h) ? '<span class="chip hit" title="不良馬場で人気より来やすい形(参考)">不良◎</span>' : ""}</td>
         ${hasSt ? `<td class="l">${stChip(h.st)}${stBar(h.sr)}</td><td class="l">${tk(h)}</td>` : ""}
         <td class="num">${h.odds != null && !isNaN(h.odds) ? h.odds.toFixed(1) : "-"}</td>
         <td class="num">${pct(h.pw)}</td>
@@ -534,6 +981,7 @@ function renderDetail() {
   $("btnSim").addEventListener("click", () => runSim(r));
   $("btnOnce").addEventListener("click", () => runOnce(r));
   renderHist(r);
+  initTenkaiSim(r);
   // 画面を描き直したとき(別のレースから戻った・Driveから読み直した等)も、回した結果を表に戻す
   const L = LASTSIM[r.id];
   if (L && L.args && L.args[1].length === r.horses.length) showSim(r, ...L.args, true);
@@ -687,6 +1135,7 @@ function renderHist(r) {
   loadDrive();
   setInterval(() => { if (document.visibilityState === "visible") loadDrive(); }, 120000);   // 2分ごとに自動で最新に
 })();
+
 </script>
 </body>
 </html>
