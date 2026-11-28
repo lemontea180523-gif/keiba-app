@@ -134,6 +134,13 @@ input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .arrow { font-size: 11px; color: var(--muted); text-align: center; letter-spacing: .1em; }
 .tk { font-weight: 700; font-size: 12px; }
 .tk.up { color: var(--good); } .tk.dn { color: var(--bad); }
+/* 荒れ指数:1(堅い)は緑、5(大荒れ)は赤 */
+.are { display: inline-block; font-weight: 700; font-size: 12px; padding: 0 6px; border-radius: 999px; white-space: nowrap; }
+.aredist { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.arebar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); }
+.arebar i { display: block; height: 100%; }
+.are.a1 { background: var(--turf-soft); color: var(--good); } .are.a2 { background: var(--turf-soft); color: var(--muted); }
+.are.a3 { background: var(--line); color: var(--ink); } .are.a4 { background: var(--gold-soft); color: var(--gold); } .are.a5 { background: var(--gold-soft); color: var(--bad); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* 展開シミュレーション */
@@ -351,7 +358,7 @@ function render() {
       const pc = paceOf(r);
       return `<button type="button" class="race ${isBuy(r) ? "has" : ""} ${SEL === r.id ? "sel" : ""}" data-id="${esc(r.id)}">
         <span class="t">${esc(r.post || "--:--")}</span>
-        <span class="n"><b>${esc(r.venue)}${r.no}R ${jump ? '<span class="chip jump">障害</span>' : ""}${r.kn ? ' <span class="chip hit">◎消し狙い</span>' : ""}${r.nerai ? ' <span class="chip hit">◎狙い目</span>' : ""}${r.chui ? ` <span class="chip miss">注意:${esc(r.chui)}</span>` : ""}${furyo(r) ? ' <span class="chip jump">不良馬場</span>' : ""}</b><span>${esc(r.name)}${pc ? ` ・ <span class="pace ${pc.cls}" style="font-size:12px">${pc.label}</span>` : ""}</span></span>
+        <span class="n"><b>${esc(r.venue)}${r.no}R ${jump ? '<span class="chip jump">障害</span>' : ""}${r.kn ? ' <span class="chip hit">◎消し狙い</span>' : ""}${r.nerai ? ' <span class="chip hit">◎狙い目</span>' : ""}${r.chui ? ` <span class="chip miss">注意:${esc(r.chui)}</span>` : ""}${furyo(r) ? ' <span class="chip jump">不良馬場</span>' : ""}</b><span>${esc(r.name)}${pc ? ` ・ <span class="pace ${pc.cls}" style="font-size:12px">${pc.label}</span>` : ""}${r.are ? ` ・ <span class="are a${r.are.lv}">荒れ${r.are.lv}</span>` : ""}</span></span>
         <span class="r">${r.combos.length ? `<span class="chip ww">${esc(r.label || "★★")} ${r.himo.join("・")}</span><span class="num">三連複${r.combos.length}点${(r.wide || []).length ? `+ワイド${r.wide.length}` : ""}${(r.fuku || []).length ? `+複勝${r.fuku.length}` : ""}</span>` : um(r).length ? `<span class="chip ww">買い方D 馬連</span><span class="num">${um(r).map(x => x.join("-")).join(" ")}</span>` : r.skip ? `<span class="chip jump">見送り</span><span class="muted" style="font-size:11px">${esc(r.skip)}</span>` : `<span class="muted">買わない</span>`}${resChip(r)}</span>
       </button>`;
     }).join("");
@@ -758,6 +765,22 @@ function tsDrawOval(r, t, run) {
 // ===== コース表示:JRAの中継の隊列図のように、コースの形にそって馬を置く(コーナーでは斜め〜縦に並ぶ) =====
 // 位置の決め方は小さいコース図と同じ(1周1800m・1馬身2.4m)。画面は馬群を追いかけて拡大する
 const TS_LAP = 1800, TS_BL = 2.4, TS_LANE = 2.3, TS_TW = 20;   // 1周・1馬身・1頭ぶんの横幅・コースの幅(m)
+// 荒れ指数ごとの、過去(2024〜2026年・約1万レース)の三連複1万円以上の割合
+const ARE_RATE = [10, 20, 32, 40, 55];
+// 荒れ指数ごとの配当の分布(2024〜2026年・学習に使っていない約1万レース)。sf=三連複の配当帯の割合%、q=三連複の25/50/75%点、ur/st=馬連・三連単の配当の真ん中、fw/f3=1番人気の勝率・3着内率%、wp=勝ち馬の人気(1/2-3/4-6/7〜)の割合%
+const ARE_DIST = {"1": {"n": 2065, "sf": [37.7, 30.1, 22.2, 8.5, 0.7, 0.8], "q": [660, 1480, 4120], "ur": 780, "st": 7090, "fw": 43.1, "f3": 78.7, "wp": [43.1, 36.8, 16.8, 3.3]}, "2": {"n": 1957, "sf": [15.8, 35.4, 29.1, 15.8, 2.1, 1.7], "q": [1420, 2930, 7590], "ur": 1290, "st": 15380, "fw": 38.5, "f3": 71.1, "wp": [38.5, 34.0, 19.9, 7.6]}, "3": {"n": 1925, "sf": [5.9, 30.5, 31.6, 24.3, 4.2, 3.5], "q": [2120, 4690, 14150], "ur": 1800, "st": 25470, "fw": 32.6, "f3": 65.5, "wp": [32.6, 34.5, 21.0, 11.9]}, "4": {"n": 2106, "sf": [2.4, 22.9, 34.8, 29.5, 4.8, 5.5], "q": [2962, 7210, 18862], "ur": 2235, "st": 36930, "fw": 30.4, "f3": 61.5, "wp": [30.4, 31.2, 22.7, 15.6]}, "5": {"n": 1922, "sf": [0.5, 10.1, 34.9, 37.9, 8.7, 7.9], "q": [5182, 11475, 31162], "ur": 3290, "st": 63720, "fw": 23.8, "f3": 52.2, "wp": [23.8, 28.4, 23.6, 24.1]}};
+const ARE_BANDS = ["〜1千円", "1千〜3千", "3千〜1万", "1万〜5万", "5万〜10万", "10万円〜"];
+const ARE_COL = ["#3f8f5f", "#7fb08a", "#c9b458", "#d98a3a", "#c2412d", "#8f1d1d"];
+function areDistBlock(lv) {
+  const d = ARE_DIST[lv];
+  if (!d) return "";
+  const bar = d.sf.map((v, i) => `<i style="width:${v}%;background:${ARE_COL[i]}" title="${ARE_BANDS[i]} ${v}%"></i>`).join("");
+  const leg = d.sf.map((v, i) => `<span style="white-space:nowrap"><b style="color:${ARE_COL[i]}">■</b>${ARE_BANDS[i]} ${v}%</span>`).join(" ");
+  return `<div class="aredist"><b style="font-size:13px">荒れ指数${lv}のレースの三連複の配当(過去${d.n.toLocaleString()}レース)</b>
+    <div class="arebar">${bar}</div><div class="muted" style="display:flex;flex-wrap:wrap;gap:4px 10px">${leg}</div>
+    <div class="muted">三連複 真ん中 <b>${d.q[1].toLocaleString()}円</b>(4分の1が${d.q[0].toLocaleString()}円以下・4分の1が${d.q[2].toLocaleString()}円以上) ・ 馬連 真ん中 ${d.ur.toLocaleString()}円 ・ 三連単 真ん中 ${d.st.toLocaleString()}円<br>
+    1番人気 勝率${d.fw}%・3着内${d.f3}% ・ 勝ち馬の人気 1番人気${d.wp[0]}% / 2〜3番人気${d.wp[1]}% / 4〜6番人気${d.wp[2]}% / 7番人気以下${d.wp[3]}%</div></div>`;
+}
 function tsGeom(right) {
   const L = 450, R = (TS_LAP - 2 * L) / (2 * Math.PI);
   const pt = p => {                                         // 内ラチの上の点(p は 0〜1。0 はゴール板)
@@ -937,6 +960,7 @@ function renderDetail() {
     <div style="display:grid;gap:4px">
       <h2>${esc(r.post)} ${esc(r.venue)}${r.no}R ${esc(r.name)}</h2>
       <div class="muted">${esc(r.surface)}${r.distance ? r.distance + "m" : ""}${r.going ? " ・ " + esc(r.going) : ""} ・ ${hs.length}頭 ・ 三連複:軸 ${r.axis} / 2列目 ${esc(r.label || "★★")} ${r.himo.join("・") || "なし"} / 3列目 ${r.third.filter(u => !r.himo.includes(u)).join(" ") || "なし"}</div>
+      ${r.are ? `<div class="muted"><span class="are a${r.are.lv}">荒れ指数 ${r.are.lv}/5</span> このレースが三連複1万円以上になる見込み <b>${Math.round(r.are.p * 100)}%</b>(過去に同じ指数だったレースでは${ARE_RATE[r.are.lv - 1]}%・平均は32%)。頭数・コースと単勝オッズの散らばり方から出しています。オッズを使うので、発走直前の「予想し直す」のあとのほうが正確です。</div>${areDistBlock(r.are.lv)}` : ""}
     </div>
     ${um(r).length ? `<div class="status good">このレースは<b>買い方D</b>です(軸も1番人気も消し条件なし=1番人気を信じてよいレース)。<b>馬連 1番人気-${esc(r.label || "★★")}</b>を買います(3年半で135%・〜2025年132%・2026年144%)。</div>
     <div class="tiles"><div class="tile"><span class="k">馬連(1番人気-${esc(r.label || "★★")})</span><span class="v num" style="font-size:16px">${um(r).map(x => x.join("-")).join(" ")}</span></div>
