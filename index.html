@@ -136,6 +136,13 @@ input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .tk.up { color: var(--good); } .tk.dn { color: var(--bad); }
 /* 荒れ指数:1(堅い)は緑、5(大荒れ)は赤 */
 .are { display: inline-block; font-weight: 700; font-size: 12px; padding: 0 6px; border-radius: 999px; white-space: nowrap; }
+/* 印の意味 */
+.legend .lg { display: grid; gap: 8px; font-size: 13px; }
+.legend dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; margin: 0; align-items: baseline; }
+.legend dt { font-weight: 700; white-space: nowrap; }
+.legend dd { margin: 0; color: var(--muted); }
+.legend .lg, .legend dl, .legend dl > * { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .legend dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .legend dt { white-space: normal; } .legend dd { margin-bottom: 6px; } }
 .aredist { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .arebar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); }
 .arebar i { display: block; height: 100%; }
@@ -192,6 +199,41 @@ input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
   <section class="list" id="list" aria-label="レースの一覧"></section>
 
   <section class="panel" id="detail" hidden></section>
+
+  <section class="panel legend" aria-label="印の意味">
+    <h2>印の意味</h2>
+    <div class="lg">
+      <b>馬の印</b>
+      <dl>
+        <dt><span class="chip ax">軸</span></dt><dd>AI複勝率が1位の馬。買い方Cの三連複・ワイドの軸です。</dd>
+        <dt><span class="chip ww">★★</span></dt><dd>単勝10〜50倍で、良い条件を5つ全部満たす穴馬。同じオッズの馬より3着内に約1.2倍来ています。買い方C・Dの相手(2列目)です。良い条件は、前走の上がりが速い方、前走は惜しい負け、前走は前目〜中団、ベストで勝ち馬と0.8秒以内、タイム指数がメンバー平均より上、の5つです。</dd>
+        <dt><span class="chip ww">芝印</span></dt><dd>軟らかい芝(クッション値9.0未満)のときに★★の代わりに使う印。単勝10〜100倍で、先行・軽め・体重減・前走0.7〜1.2秒差のうち3つ以上を満たし、逃げ・体重増・前走最後方のどれでもない馬です。</dd>
+        <dt><span class="chip jump">★</span></dt><dd>単勝10倍以上で、良い条件を3つ以上満たす穴馬(約1.08倍来ている)。買い目には使いません。</dd>
+        <dt><span class="chip jump">◆</span></dt><dd>それまで好成績なのに、前走で大敗して人気を落とした馬。勝ち切ることがあります(単勝・馬連の1列目向き)。</dd>
+        <dt><span class="chip jump">△</span></dt><dd>それまでいまいちなのに、前走で勝って人気になった馬。買われすぎのことが多い印です(根拠は弱め)。</dd>
+        <dt><span class="chip jump">✕</span></dt><dd>単勝10倍以上で、本当に弱い穴馬。見込みより1〜2割来ないので、三連複の3列目から外します。</dd>
+        <dt><span class="chip hit">不良◎</span></dt><dd>不良馬場のとき、人気より来やすい形の馬(参考の目印・買い目ではない)。</dd>
+        <dt><span class="tk up">向く</span> <span class="tk dn">向かない</span></dt><dd>予想ペースで、その馬の脚質が有利か不利か。</dd>
+      </dl>
+      <b>騎手の印</b>
+      <dl>
+        <dt>騎手名の(3着内○%)</dt><dd>その騎手のこれまでの3着内率。</dd>
+        <dt>▲ △ ☆</dt><dd>見習騎手などの減量の印。男性騎手は▲が3kg・△が2kg・☆が1kg、女性騎手の▲は3kg減です(勝った数が少ないほど減る量が大きい)。</dd>
+        <dt>★(騎手名の前)</dt><dd>女性の見習騎手などで4kg減。</dd>
+        <dt>◇(騎手名の前)</dt><dd>見習期間を過ぎた女性騎手で2kg減。</dd>
+        <dt class="muted" style="grid-column:1/-1;font-weight:400">減量は、特別競走とハンデ戦以外のレースのときだけです。</dt>
+      </dl>
+      <b>レースの印</b>
+      <dl>
+        <dt><span class="chip ww">買い方D 馬連</span></dt><dd>軸も1番人気も消し条件なし。馬連 1番人気-★★(芝印)を買うレース。</dd>
+        <dt><span class="chip jump">見送り</span></dt><dd>乾いたダート・オープン/重賞など、過去に負けていた条件のレース。</dd>
+        <dt><span class="chip hit">◎狙い目</span></dt><dd>1番人気1.9〜3.2倍で、印の単勝が30倍以下のレース(3年半で回収率130%前後)。</dd>
+        <dt><span class="chip hit">◎消し狙い</span></dt><dd>人気馬が消し条件(昇級・休み明けなど)に当てはまり、ほかの馬の配当が上がりやすいレース。</dd>
+        <dt><span class="chip miss">注意</span></dt><dd>過去に成績が悪かった条件(小倉・重馬場など)。</dd>
+        <dt><span class="are a1">荒れ1</span>〜<span class="are a5">荒れ5</span></dt><dd>荒れ指数。三連複が1万円以上になった割合は、過去に指数1で10%、指数5で55%です。</dd>
+      </dl>
+    </div>
+  </section>
 
   <details>
     <summary>読み込めないとき</summary>
