@@ -217,6 +217,7 @@ input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
       </dl>
       <b>騎手の印</b>
       <dl>
+        <dt><span class="chip ww">◇騎</span></dt><dd>重賞(GIII以上)で、3着内率が上位20%の騎手が乗る7〜9番人気の馬。過去(2023年7月〜・440頭)で単勝103%・複勝101%、軸からのワイド125%・馬連119%でした(どれも大きい当たり数回に支えられた数字)。人気は直前まで動くので、「予想し直す」のあとが正確です。</dd>
         <dt>騎手名の(3着内○%)</dt><dd>その騎手のこれまでの3着内率。</dd>
         <dt>▲ △ ☆</dt><dd>見習騎手などの減量の印。男性騎手は▲が3kg・△が2kg・☆が1kg、女性騎手の▲は3kg減です(勝った数が少ないほど減る量が大きい)。</dd>
         <dt>★(騎手名の前)</dt><dd>女性の見習騎手などで4kg減。</dd>
@@ -1033,7 +1034,7 @@ function renderDetail() {
       <thead><tr><th>馬番</th><th class="l">馬名・騎手</th><th>印</th>${hasSt ? '<th class="l">脚質(最近5走)</th><th class="l">展開</th>' : ""}<th>単勝</th><th>AI勝率</th><th>AI複勝率</th><th>1着</th><th>2着内</th><th>3着内</th><th>着順</th></tr></thead>
       <tbody>${hs.map(h => `<tr class="${h.u === r.axis ? "isax" : r.himo.includes(h.u) ? "isww" : ""}" data-u="${h.u}">
         <td class="num">${h.u}</td><td class="l">${esc(h.name)}${h.jk ? `<br><span class="muted" style="font-size:11px">${esc(h.jk)}${h.jk3 != null ? ` (3着内${Math.round(h.jk3 * 100)}%)` : ""}</span>` : ""}</td>
-        <td>${h.u === r.axis ? '<span class="chip ax">軸</span>' : ""}${h.mark ? `<span class="chip ${h.mark === "★★" || h.mark === "芝印" ? "ww" : "jump"}">${esc(h.mark)}</span>` : ""}${furyoPick(r, h) ? '<span class="chip hit" title="不良馬場で人気より来やすい形(参考)">不良◎</span>' : ""}</td>
+        <td>${h.u === r.axis ? '<span class="chip ax">軸</span>' : ""}${h.jkm ? '<span class="chip ww" title="重賞で、3着内率が上位20%の騎手が乗る7〜9番人気">◇騎</span>' : ""}${h.mark ? `<span class="chip ${h.mark === "★★" || h.mark === "芝印" ? "ww" : "jump"}">${esc(h.mark)}</span>` : ""}${furyoPick(r, h) ? '<span class="chip hit" title="不良馬場で人気より来やすい形(参考)">不良◎</span>' : ""}</td>
         ${hasSt ? `<td class="l">${stChip(h.st)}${stBar(h.sr)}</td><td class="l">${tk(h)}</td>` : ""}
         <td class="num">${h.odds != null && !isNaN(h.odds) ? h.odds.toFixed(1) : "-"}</td>
         <td class="num">${pct(h.pw)}</td>
